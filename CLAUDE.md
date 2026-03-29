@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## MUST Rules
+
+- **When asked to review, only report findings — never proactively apply fixes.** Present suggestions and wait for explicit instruction before making any changes.
+
 ## Project Overview
 
 **coach-ai** is a dual-role virtual coach that:
