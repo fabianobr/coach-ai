@@ -15,7 +15,7 @@ The full AI behavior is defined in `SYSTEM_PROMPT.md`. The Claude Code skill is 
 ```bash
 # Install dependencies for your chosen LLM provider
 pip install -e ".[anthropic]"   # or: openai, ollama, gemini, all
-pip install -e ".[dev]"         # adds pytest, ruff, python-dotenv
+pip install -e ".[dev]"         # adds pytest, pytest-asyncio, ruff, python-dotenv
 
 # Run tests (no API keys needed — all SDKs are mocked)
 pytest tests/ -v
@@ -57,7 +57,7 @@ for chunk in llm.stream([Message(role="user", content="bench cues?")]):
 | Variable | Default | Notes |
 | :--- | :--- | :--- |
 | `LLM_PROVIDER` | `anthropic` | `anthropic` \| `openai` \| `ollama` \| `gemini` |
-| `LLM_MODEL` | *(see table below)* | Leave blank to use provider default |
+| `LLM_MODEL` | *(see defaults below)* | Leave blank to use provider default |
 | `LLM_API_KEY` | — | Falls back to `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY` |
 | `LLM_BASE_URL` | — | Useful for Ollama (`http://localhost:11434/v1`) or proxies |
 | `LLM_MAX_TOKENS` | `2048` | |
