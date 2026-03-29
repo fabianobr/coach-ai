@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
@@ -10,94 +10,62 @@ This file provides guidance to Claude Code when working with this repository.
 
 The full AI behavior is defined in `SYSTEM_PROMPT.md`. The Claude Code skill is in `.claude/skills/coach/SKILL.md`.
 
-## Quick Start
+## Commands
 
 ```bash
 # Install dependencies for your chosen LLM provider
-pip install -e ".[anthropic]"   # or openai, ollama, gemini, all
+pip install -e ".[anthropic]"   # or: openai, ollama, gemini, all
+pip install -e ".[dev]"         # adds pytest, ruff, python-dotenv
 
-# Copy and fill in your provider config
-cp .env.example .env
-
-# Run tests
+# Run tests (no API keys needed — all SDKs are mocked)
 pytest tests/ -v
+pytest tests/test_llm_factory.py -v          # single module
+pytest tests/test_llm_providers.py::TestAnthropicProvider -v  # single class
+
+# Lint
+ruff check src/ tests/
+ruff format src/ tests/
+
+# Copy and fill in provider config
+cp .env.example .env
 ```
 
-## Project Structure
+## Architecture
 
-```
-coach-ai/
-├── CLAUDE.md                      ← this file
-├── SYSTEM_PROMPT.md               ← full AI persona & interaction rules
-├── README.md                      ← project overview
-├── .env.example                   ← LLM provider config template
-├── pyproject.toml                 ← dependencies per provider
-├── data/
-│   └── program.json               ← training program (D1/D2/D4/D5)
-├── templates/
-│   ├── daily_tracking_table.md    ← per-session workout log template
-│   └── evolution_chart.md         ← weekly progress & PR tracker
-├── logs/                          ← session logs (YYYY-MM-DD.md, git-ignored)
-├── src/coach/
-│   └── llm/                       ← LLM abstraction layer
-│       ├── base.py                ← LLMProvider ABC, Message, LLMConfig
-│       ├── factory.py             ← get_provider(), config_from_env()
-│       └── providers/
-│           ├── anthropic.py
-│           ├── openai.py
-│           ├── ollama.py          ← delegates to OpenAI provider at /v1
-│           └── gemini.py
-├── tests/
-│   ├── test_llm_base.py
-│   ├── test_llm_factory.py
-│   └── test_llm_providers.py
-└── .claude/skills/coach/
-    └── SKILL.md                   ← Claude Code skill entry point
-```
+### LLM Abstraction Layer (`src/coach/llm/`)
 
-## LLM Abstraction Layer
+Provider-agnostic design — swap providers via `.env`, no code changes needed.
 
-The core design is provider-agnostic. Switch providers via `.env` — no code changes needed.
+- **`base.py`** — `LLMProvider` ABC with `chat()` and `stream()` methods; `Message` and `LLMConfig` dataclasses
+- **`factory.py`** — `get_provider(config?)` instantiates the right provider; `config_from_env()` reads `.env`
+- **`providers/`** — one file per provider; `ollama.py` is a thin wrapper that delegates to `OpenAIProvider` pointed at `http://localhost:11434/v1`
 
-### Usage
+All providers implement the same interface:
 
 ```python
 from coach.llm import get_provider, Message
 
-llm = get_provider()  # reads from .env
+llm = get_provider()  # reads LLM_PROVIDER from .env
 response = llm.chat([Message(role="user", content="squat done 5x5")])
 
-# Streaming
 for chunk in llm.stream([Message(role="user", content="bench cues?")]):
     print(chunk, end="", flush=True)
 ```
 
 ### Provider Configuration (`.env`)
 
-```bash
-LLM_PROVIDER=anthropic          # anthropic | openai | ollama | gemini
-LLM_MODEL=claude-haiku-4-5-20251001   # leave blank for provider default
-LLM_API_KEY=                    # or use provider-specific key below
-ANTHROPIC_API_KEY=
-OPENAI_API_KEY=
-GOOGLE_API_KEY=
-LLM_BASE_URL=                   # ollama default: http://localhost:11434/v1
-LLM_MAX_TOKENS=2048
-LLM_TEMPERATURE=0.7
-```
+| Variable | Default | Notes |
+| :--- | :--- | :--- |
+| `LLM_PROVIDER` | `anthropic` | `anthropic` \| `openai` \| `ollama` \| `gemini` |
+| `LLM_MODEL` | *(see table below)* | Leave blank to use provider default |
+| `LLM_API_KEY` | — | Falls back to `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY` |
+| `LLM_BASE_URL` | — | Useful for Ollama (`http://localhost:11434/v1`) or proxies |
+| `LLM_MAX_TOKENS` | `2048` | |
+| `LLM_TEMPERATURE` | `0.7` | |
 
-### Default Models
+Default models: `anthropic` → `claude-haiku-4-5-20251001`, `openai` → `gpt-4o-mini`, `ollama` → `llama3.2`, `gemini` → `gemini-2.0-flash`.
 
-| Provider | Default Model |
-| :--- | :--- |
-| anthropic | claude-haiku-4-5-20251001 |
-| openai | gpt-4o-mini |
-| ollama | llama3.2 |
-| gemini | gemini-2.0-flash |
-
-## Training Program
-
-Defined in `data/program.json`. Four days:
+### Training Program (`data/program.json`)
 
 | Day | Focus | Key lifts |
 | :--- | :--- | :--- |
@@ -106,26 +74,16 @@ Defined in `data/program.json`. Four days:
 | D4 | Lower Hypertrophy | Hack Squat, Leg Curl, Lunges, Hip Thrust |
 | D5 | Upper Hypertrophy | Low Row, Lat Pulldown, Chest Fly, Arms superset |
 
-### Tonnage Formula
-
+Tonnage formulas:
 - **Barbell:** `(weight_per_side × 2 + 20kg bar) × reps × sets`
 - **Machine/cable/dumbbell:** `weight × reps × sets`
-- **Isometric (Weighted Plank):** no tonnage — track as TuT (seconds)
+- **Isometric (Weighted Plank):** track as TuT (seconds), no tonnage
 
 ## Testing
 
-```bash
-# Run all tests (no API keys needed — all providers are mocked)
-pytest tests/ -v
-
-# Filter by module
-pytest tests/test_llm_factory.py -v
-pytest tests/test_llm_providers.py -v
-```
-
 Tests use `unittest.mock` and `patch.dict("sys.modules", ...)` to mock provider SDKs. No real API calls are made.
 
-**Important:** When writing new provider tests, always place `isinstance` assertions and `from ... import` statements **inside** the `patch.dict` context — not after it exits. This prevents class identity mismatches due to module cache cleanup.
+**Critical:** Place `isinstance` assertions and `from ... import` statements **inside** the `patch.dict` context — not after it exits. Exiting the context flushes the module cache, causing class identity mismatches.
 
 ## Conventions
 
@@ -133,7 +91,7 @@ Tests use `unittest.mock` and `patch.dict("sys.modules", ...)` to mock provider 
 - Missing data → `"N/A"`, never invented
 - Isometric exercises tracked by TuT (seconds), not tonnage
 - Logs saved to `logs/YYYY-MM-DD.md` (git-ignored)
-- Follow Conventional Commits: `feat:`, `fix:`, `chore:`, `test:`
+- Conventional Commits: `feat:`, `fix:`, `chore:`, `test:`
 
 ## Next Steps (In Development)
 
