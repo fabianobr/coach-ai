@@ -1,0 +1,228 @@
+{
+  "barbell_weight_kg": 20,
+  "days": {
+    "D1": {
+      "label": "LOWER | STRENGTH",
+      "exercises": [
+        {
+          "order": 1,
+          "name": "Back Squat",
+          "type": "barbell",
+          "sets": 5,
+          "reps": 5,
+          "weight_per_side_kg": 45,
+          "total_weight_kg": 110,
+          "isometric": false
+        },
+        {
+          "order": 2,
+          "name": "Leg Press 45°",
+          "type": "machine",
+          "sets": 3,
+          "reps": 8,
+          "weight_per_side_kg": 90,
+          "total_weight_kg": 180,
+          "isometric": false
+        },
+        {
+          "order": 3,
+          "name": "RDL / Stiff",
+          "type": "barbell",
+          "sets": 3,
+          "reps": 7,
+          "weight_per_side_kg": 42.5,
+          "total_weight_kg": 105,
+          "isometric": false
+        },
+        {
+          "order": 4,
+          "name": "Hip Abduction",
+          "type": "cable",
+          "sets": 3,
+          "reps": 15,
+          "weight_kg": 2.5,
+          "isometric": false
+        },
+        {
+          "order": 5,
+          "name": "Weighted Plank",
+          "type": "isometric",
+          "sets": 3,
+          "hold_seconds": 35,
+          "weight_kg": 20,
+          "isometric": true
+        }
+      ]
+    },
+    "D2": {
+      "label": "UPPER | STRENGTH",
+      "exercises": [
+        {
+          "order": 1,
+          "name": "Bench Press",
+          "type": "barbell",
+          "sets": 5,
+          "reps": 5,
+          "weight_per_side_kg": 30,
+          "total_weight_kg": 80,
+          "isometric": false
+        },
+        {
+          "order": 2,
+          "name": "Barbell Row",
+          "type": "barbell",
+          "sets": 4,
+          "reps": 7,
+          "weight_per_side_kg": 25,
+          "total_weight_kg": 70,
+          "isometric": false
+        },
+        {
+          "order": 3,
+          "name": "Incline Bench",
+          "type": "barbell",
+          "sets": 3,
+          "reps": 8,
+          "weight_per_side_kg": 22.5,
+          "total_weight_kg": 65,
+          "isometric": false
+        },
+        {
+          "order": 4,
+          "name": "Face Pull",
+          "type": "cable",
+          "sets": 3,
+          "reps": 15,
+          "weight_kg": 22,
+          "isometric": false
+        },
+        {
+          "order": 5,
+          "name": "Y-Raise",
+          "type": "dumbbell",
+          "sets": 3,
+          "reps": 15,
+          "weight_kg": 7,
+          "isometric": false
+        }
+      ]
+    },
+    "D4": {
+      "label": "LOWER | HYPERTROPHY",
+      "exercises": [
+        {
+          "order": 1,
+          "name": "Hack Squat",
+          "type": "machine",
+          "sets": 4,
+          "reps_min": 9,
+          "reps_max": 9,
+          "weight_kg": 45,
+          "isometric": false
+        },
+        {
+          "order": 2,
+          "name": "Leg Curl (Mesa Flexora)",
+          "type": "machine",
+          "sets": 4,
+          "reps_min": 10,
+          "reps_max": 12,
+          "weight_kg": 45,
+          "isometric": false
+        },
+        {
+          "order": 3,
+          "name": "Lunges (Passada)",
+          "type": "dumbbell",
+          "sets": 3,
+          "reps_min": 10,
+          "reps_max": 12,
+          "weight_per_side_kg": 12.5,
+          "isometric": false
+        },
+        {
+          "order": 4,
+          "name": "Hip Thrust",
+          "type": "barbell",
+          "sets": 3,
+          "reps_min": 10,
+          "reps_max": 12,
+          "weight_kg": 30,
+          "isometric": false
+        },
+        {
+          "order": 5,
+          "name": "Back Extension",
+          "type": "weighted",
+          "sets": 3,
+          "reps_min": 10,
+          "reps_max": 12,
+          "weight_kg": 20,
+          "isometric": false
+        }
+      ]
+    },
+    "D5": {
+      "label": "UPPER | HYPERTROPHY",
+      "exercises": [
+        {
+          "order": 1,
+          "name": "Low Row (Remada Baixa)",
+          "type": "cable",
+          "sets": 3,
+          "reps": 10,
+          "weight_kg": 86,
+          "isometric": false
+        },
+        {
+          "order": 2,
+          "name": "Lat Pulldown (Puxada)",
+          "type": "cable",
+          "sets": 4,
+          "reps": 10,
+          "weight_kg": 55,
+          "isometric": false
+        },
+        {
+          "order": 3,
+          "name": "Machine Lateral Raise",
+          "type": "machine",
+          "sets": 3,
+          "reps": 15,
+          "weight_per_side_kg": 7.5,
+          "isometric": false
+        },
+        {
+          "order": 4,
+          "name": "Chest Fly (Crucifixo)",
+          "type": "dumbbell",
+          "sets": 3,
+          "reps": 15,
+          "weight_per_side_kg_min": 17.5,
+          "weight_per_side_kg_max": 20,
+          "isometric": false
+        },
+        {
+          "order": 5,
+          "name": "Bicep Curls",
+          "type": "dumbbell",
+          "sets": 3,
+          "reps": 12,
+          "weight_per_side_kg": 15,
+          "superset_with": "Tricep Pushdown",
+          "isometric": false
+        },
+        {
+          "order": 6,
+          "name": "Tricep Pushdown",
+          "type": "cable",
+          "sets": 3,
+          "reps": 12,
+          "weight_kg": 22,
+          "superset_with": "Bicep Curls",
+          "isometric": false
+        }
+      ]
+    }
+  }
+}
