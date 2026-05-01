@@ -16,10 +16,11 @@ The full AI behavior is defined in `SYSTEM_PROMPT.md`. The Claude Code skill is 
 
 ## Commands
 
+Requires **Python ≥ 3.12**. The `[dev]` extra does not include a provider SDK — install both together:
+
 ```bash
-# Install dependencies for your chosen LLM provider
-pip install -e ".[anthropic]"   # or: openai, ollama, gemini, all
-pip install -e ".[dev]"         # adds pytest, pytest-asyncio, ruff, python-dotenv
+# Install a provider + dev tools in one command (Python ≥ 3.12 required)
+pip install -e ".[anthropic,dev]"   # or: openai,dev | ollama,dev | gemini,dev | all,dev
 
 # Run tests (no API keys needed — all SDKs are mocked)
 pytest tests/ -v
@@ -35,6 +36,8 @@ cp .env.example .env
 ```
 
 ## Architecture
+
+coach-ai runs in **two independent runtimes**: (a) the Python `src/coach/llm/` package is a provider-agnostic chat client used by future CLI/REST/Telegram entry points; (b) the Claude Code skill at `.claude/skills/coach/SKILL.md` consumes `SYSTEM_PROMPT.md`, `data/program.json`, and `templates/*.md` to drive the dual-role coaching behavior directly inside Claude Code. The Python layer does **not** currently load `SYSTEM_PROMPT.md` — that's planned (see Next Steps).
 
 ### LLM Abstraction Layer (`src/coach/llm/`)
 
@@ -55,6 +58,15 @@ response = llm.chat([Message(role="user", content="squat done 5x5")])
 for chunk in llm.stream([Message(role="user", content="bench cues?")]):
     print(chunk, end="", flush=True)
 ```
+
+### Adding a new provider
+
+1. Create `src/coach/llm/providers/<name>.py` — subclass `LLMProvider`, implement `chat()` and `stream()`.
+2. Add a `case "<name>":` branch in `get_provider()` (`src/coach/llm/factory.py:70`).
+3. Add a default model to `_DEFAULT_MODELS` (`factory.py:8`).
+4. If an API key falls back to a vendor env var, add it to `_key_fallbacks` (`factory.py:35`).
+5. Add an optional-dependency group in `pyproject.toml` under `[project.optional-dependencies]`.
+6. Add a `TestXProvider` class in `tests/test_llm_providers.py` — mock the SDK with `patch.dict("sys.modules", ...)` and import the provider **inside** the context (same pattern as existing classes).
 
 ### Provider Configuration (`.env`)
 
@@ -89,6 +101,8 @@ Tests use `unittest.mock` and `patch.dict("sys.modules", ...)` to mock provider 
 
 **Critical:** Place `isinstance` assertions and `from ... import` statements **inside** the `patch.dict` context — not after it exits. Exiting the context flushes the module cache, causing class identity mismatches.
 
+Tests import via `from src.coach.llm... import ...` (e.g. `tests/test_llm_providers.py:6`), not `from coach.llm...`. Keep that pattern when adding new tests — it's tied to the `patch.dict` mocking setup.
+
 ## Conventions
 
 - All output in **English**
@@ -96,6 +110,7 @@ Tests use `unittest.mock` and `patch.dict("sys.modules", ...)` to mock provider 
 - Isometric exercises tracked by TuT (seconds), not tonnage
 - Logs saved to `logs/YYYY-MM-DD.md` (git-ignored)
 - Conventional Commits: `feat:`, `fix:`, `chore:`, `test:`
+- `templates/daily_tracking_table.md` and `templates/evolution_chart.md` are consumed by the `coach` skill — keep their column shape stable; the skill references them in its interaction loop.
 
 ## Next Steps (In Development)
 
