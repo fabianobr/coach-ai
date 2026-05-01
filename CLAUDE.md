@@ -62,7 +62,7 @@ for chunk in llm.stream([Message(role="user", content="bench cues?")]):
 ### Adding a new provider
 
 1. Create `src/coach/llm/providers/<name>.py` — subclass `LLMProvider`, implement `chat()` and `stream()`.
-2. Add a `case "<name>":` branch in `get_provider()` (`src/coach/llm/factory.py:70`).
+2. Add a `case "<name>":` branch in `get_provider()` (`src/coach/llm/factory.py:71`).
 3. Add a default model to `_DEFAULT_MODELS` (`factory.py:8`).
 4. If an API key falls back to a vendor env var, add it to `_key_fallbacks` (`factory.py:35`).
 5. Add an optional-dependency group in `pyproject.toml` under `[project.optional-dependencies]`.
