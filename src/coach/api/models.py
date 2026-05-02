@@ -1,8 +1,8 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ChatRequest(BaseModel):
-    session_id: str
+    session_id: str = Field(..., max_length=128)
     message: str
     stream: bool = False
 

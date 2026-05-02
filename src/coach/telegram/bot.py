@@ -2,24 +2,19 @@ import asyncio
 import json
 import logging
 import os
+from datetime import datetime
 from pathlib import Path
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
+from coach.constants import DAY_LABELS
 from coach.llm import Message, get_provider
+from coach.logger import SessionLogger
 from coach.telegram.user_sessions import UserSessionStore
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-_DAY_LABELS = {
-    "D1": "LOWER | STRENGTH",
-    "D2": "UPPER | STRENGTH",
-    "D4": "LOWER | HYPERTROPHY",
-    "D5": "UPPER | HYPERTROPHY",
-}
 
 
 class CoachBot:
@@ -91,16 +86,31 @@ class CoachBot:
             return
 
         session.current_day = day_id
-        day_label = _DAY_LABELS.get(day_id, "Unknown")
+        day_label = DAY_LABELS.get(day_id, "Unknown")
         await update.message.reply_text(f"✅ Training day set to {day_id} ({day_label})")
 
     async def handle_done(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user_id = update.effective_user.id
         session = self.store.get_or_create(user_id)
-        await update.message.reply_text(
-            f"✅ Session complete! Workout saved.\n"
-            f"Great work on {session.current_day}! 💪"
-        )
+
+        logger_instance = SessionLogger()
+        date_str = datetime.now().strftime("%Y-%m-%d")
+
+        try:
+            await asyncio.to_thread(logger_instance.save, session.current_day, date_str)
+            await update.message.reply_text(
+                f"✅ Session complete! Workout saved.\n"
+                f"Great work on {session.current_day}! 💪"
+            )
+        except FileExistsError:
+            await update.message.reply_text(
+                f"⚠️ Workout for {date_str} already logged.\n"
+                f"Session data cleared."
+            )
+        except Exception as e:
+            logger.error(f"Failed to save workout for user {user_id}: {e}")
+            await update.message.reply_text("⚠️ Could not save workout. Session cleared.")
+
         self.store.clear(user_id)
 
     async def handle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -134,9 +144,14 @@ class CoachBot:
         chunk_size = 200
 
         try:
-            for chunk in self.provider.stream(
-                messages=list(session.messages), system=self.system_prompt
-            ):
+            chunks = await asyncio.to_thread(
+                lambda: list(
+                    self.provider.stream(
+                        messages=list(session.messages), system=self.system_prompt
+                    )
+                )
+            )
+            for chunk in chunks:
                 full_response += chunk
                 buffer += chunk
 

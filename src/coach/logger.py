@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 
+from coach.constants import DAY_LABELS
+
 
 # ---------------------------------------------------------------------------
 # Enums / exceptions / dataclasses
@@ -50,13 +52,6 @@ class SessionLog:
 # ---------------------------------------------------------------------------
 # Tonnage calculation
 # ---------------------------------------------------------------------------
-
-_DAY_LABELS: dict[str, str] = {
-    "D1": "LOWER | STRENGTH",
-    "D2": "UPPER | STRENGTH",
-    "D4": "LOWER | HYPERTROPHY",
-    "D5": "UPPER | HYPERTROPHY",
-}
 
 _BARBELL_BAR_KG = 20.0
 
@@ -118,8 +113,8 @@ class SessionLogger:
 
     def save(self, day_id: str, date: str, duration_minutes: int = 0) -> Path:
         """Write session log to logs/{date}.md. Raises FileExistsError if already exists."""
-        if day_id not in _DAY_LABELS:
-            raise ValueError(f"Invalid day_id: {day_id}. Must be one of {list(_DAY_LABELS)}")
+        if day_id not in DAY_LABELS:
+            raise ValueError(f"Invalid day_id: {day_id}. Must be one of {list(DAY_LABELS)}")
 
         self.logs_dir.mkdir(parents=True, exist_ok=True)
         log_path = self.logs_dir / f"{date}.md"
@@ -130,7 +125,7 @@ class SessionLogger:
         total_tonnage = sum(
             r.tonnage_kg for r in self._results if r.tonnage_kg is not None
         )
-        day_label = _DAY_LABELS[day_id]
+        day_label = DAY_LABELS[day_id]
 
         lines: list[str] = [
             f"# Daily Training Log — {day_label} | {date}",
@@ -158,7 +153,7 @@ class SessionLogger:
 
         for i, r in enumerate(self._results, start=1):
             status_icon = _status_icon(r)
-            if r.status == ExerciseStatus.SKIPPED or r.status == ExerciseStatus.INCOMPLETE:
+            if r.status in (ExerciseStatus.SKIPPED, ExerciseStatus.INCOMPLETE):
                 lines.append(f"| {i} | {status_icon} | {r.name} | — | — | — | — | |")
             elif r.tut_seconds is not None:
                 hold = r.tut_seconds // r.sets if r.sets else r.tut_seconds
@@ -200,7 +195,7 @@ class SessionLogger:
             "",
         ]
 
-        log_path.write_text("\n".join(lines), encoding="utf-8")
+        log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return log_path
 
     def detect_prs(
@@ -221,17 +216,19 @@ class SessionLogger:
             except OSError:
                 continue
             for line in content.splitlines():
-                if exercise_name in line and "|" in line:
-                    parts = [p.strip() for p in line.split("|")]
-                    # Table row: | # | status | name | target | weight | reps | tonnage | notes |
-                    if len(parts) >= 6:
-                        weight_cell = parts[5] if len(parts) > 5 else ""
-                        try:
-                            w = float(weight_cell.replace("kg", "").strip())
-                            if max_weight is None or w > max_weight:
-                                max_weight = w
-                        except ValueError:
-                            pass
+                if "|" not in line:
+                    continue
+                parts = [p.strip() for p in line.split("|")]
+                # Table row: | # | status | name | target | weight | reps | tonnage | notes |
+                # After split: ['', '1', 'icon', 'name', 'target', 'weight', 'reps', 'tonnage', 'notes', '']
+                if len(parts) >= 6 and parts[3] == exercise_name:
+                    weight_cell = parts[5] if len(parts) > 5 else ""
+                    try:
+                        w = float(weight_cell.replace("kg", "").strip())
+                        if max_weight is None or w > max_weight:
+                            max_weight = w
+                    except ValueError:
+                        pass
 
         if weight_kg is not None and max_weight is not None and weight_kg > max_weight:
             return PRType.WEIGHT

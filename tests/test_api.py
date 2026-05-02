@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 def _make_mock_provider(chunks=None):
     mock_provider = MagicMock()
     mock_provider.stream.return_value = iter(chunks or ["Test", " response"])
+    mock_provider.chat.return_value = "".join(chunks or ["Test", " response"])
     return mock_provider
 
 
@@ -56,6 +57,7 @@ def test_health_returns_200(api_client):
 def test_chat_returns_response(api_client):
     client, mock_provider = api_client
     mock_provider.stream.return_value = iter(["Hello coach!"])
+    mock_provider.chat.return_value = "Hello coach!"
 
     resp = client.post("/chat", json={"session_id": "s1", "message": "squat done"})
     assert resp.status_code == 200
@@ -67,12 +69,13 @@ def test_chat_returns_response(api_client):
 def test_chat_accumulates_history(api_client):
     client, mock_provider = api_client
     mock_provider.stream.side_effect = [iter(["resp1"]), iter(["resp2"])]
+    mock_provider.chat.side_effect = ["resp1", "resp2"]
 
     client.post("/chat", json={"session_id": "hist_session", "message": "first message"})
     client.post("/chat", json={"session_id": "hist_session", "message": "second message"})
 
-    assert mock_provider.stream.call_count == 2
-    second_call_history = mock_provider.stream.call_args_list[1][1]["messages"]
+    assert mock_provider.chat.call_count == 2
+    second_call_history = mock_provider.chat.call_args_list[1][1]["messages"]
     # user1 + assistant1 + user2 = 3 messages
     assert len(second_call_history) >= 3
 
@@ -80,12 +83,13 @@ def test_chat_accumulates_history(api_client):
 def test_different_sessions_are_isolated(api_client):
     client, mock_provider = api_client
     mock_provider.stream.side_effect = [iter(["resp_a"]), iter(["resp_b"])]
+    mock_provider.chat.side_effect = ["resp_a", "resp_b"]
 
     client.post("/chat", json={"session_id": "alice", "message": "hello"})
     client.post("/chat", json={"session_id": "bob", "message": "hi"})
 
-    alice_history = mock_provider.stream.call_args_list[0][1]["messages"]
-    bob_history = mock_provider.stream.call_args_list[1][1]["messages"]
+    alice_history = mock_provider.chat.call_args_list[0][1]["messages"]
+    bob_history = mock_provider.chat.call_args_list[1][1]["messages"]
     assert len(alice_history) == 1
     assert len(bob_history) == 1
 

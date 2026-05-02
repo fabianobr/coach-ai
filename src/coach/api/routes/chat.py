@@ -1,3 +1,6 @@
+import asyncio
+import logging
+
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
@@ -5,16 +8,20 @@ from coach.api.models import ChatRequest, ChatResponse
 from coach.llm import Message
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 async def _event_generator(history, system_prompt, provider, store, session_id):
     full_response = ""
     try:
-        for chunk in provider.stream(messages=history, system=system_prompt):
+        for chunk in await asyncio.to_thread(
+            lambda: list(provider.stream(messages=history, system=system_prompt))
+        ):
             full_response += chunk
             yield f"data: {chunk}\n\n"
     except Exception as e:
-        yield f"data: [ERROR: {e}]\n\n"
+        logger.error(f"LLM streaming error for session {session_id}: {e}")
+        yield f"data: [ERROR]\n\n"
         return
     store.append(session_id, Message(role="assistant", content=full_response))
     yield "data: [DONE]\n\n"
@@ -36,12 +43,13 @@ async def chat(request: ChatRequest, req: Request):
             media_type="text/event-stream",
         )
 
-    response_text = ""
     try:
-        for chunk in provider.stream(messages=history, system=system_prompt):
-            response_text += chunk
+        response_text = await asyncio.to_thread(
+            provider.chat, messages=history, system=system_prompt
+        )
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"LLM service unavailable: {e}")
+        logger.error(f"LLM error for session {request.session_id}: {e}")
+        raise HTTPException(status_code=502, detail="LLM service unavailable")
 
     store.append(request.session_id, Message(role="assistant", content=response_text))
     return ChatResponse(session_id=request.session_id, response=response_text)
