@@ -22,6 +22,9 @@ Requires **Python ≥ 3.12**. The `[dev]` extra does not include a provider SDK 
 # Install a provider + dev tools in one command (Python ≥ 3.12 required)
 pip install -e ".[anthropic,dev]"   # or: openai,dev | ollama,dev | gemini,dev | all,dev
 
+# Setup config (required before running tests or commands)
+cp .env.example .env                 # fill in API keys if testing live providers
+
 # Run tests (no API keys needed — all SDKs are mocked)
 pytest tests/ -v
 pytest tests/test_llm_factory.py -v          # single module
@@ -30,14 +33,15 @@ pytest tests/test_llm_providers.py::TestAnthropicProvider -v  # single class
 # Lint
 ruff check src/ tests/
 ruff format src/ tests/
-
-# Copy and fill in provider config
-cp .env.example .env
 ```
 
 ## Architecture
 
-coach-ai runs in **two independent runtimes**: (a) the Python `src/coach/llm/` package is a provider-agnostic chat client used by future CLI/REST/Telegram entry points; (b) the Claude Code skill at `.claude/skills/coach/SKILL.md` consumes `SYSTEM_PROMPT.md`, `data/program.json`, and `templates/*.md` to drive the dual-role coaching behavior directly inside Claude Code. The Python layer does **not** currently load `SYSTEM_PROMPT.md` — that's planned (see Next Steps).
+coach-ai runs in **two independent runtimes**:
+
+1. **Claude Code skill (current user entry point)** — `.claude/skills/coach/SKILL.md` loads `SYSTEM_PROMPT.md`, `data/program.json`, and `templates/*.md` to deliver the full dual-role coaching experience directly inside Claude Code.
+
+2. **Python LLM library (`src/coach/llm/`)** — Provider-agnostic chat client for future CLI, REST, and Telegram entry points. The Python layer does **not** currently load `SYSTEM_PROMPT.md`—that integration is planned (see Next Steps).
 
 ### LLM Abstraction Layer (`src/coach/llm/`)
 
