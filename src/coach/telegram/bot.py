@@ -120,7 +120,7 @@ class CoachBot:
         user_id = update.effective_user.id
         session = self.store.get_or_create(user_id)
 
-        if not self.program or session.current_day not in self.program["days"]:
+        if not self.program or session.current_day not in self.program.get("days", {}):
             await update.message.reply_text("Unable to load training program")
             return
 
