@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from coach.llm import Message
+from coach.logger import ExerciseResult
 
 
 @dataclass
@@ -10,6 +11,7 @@ class UserSession:
     user_id: int
     messages: list[Message] = field(default_factory=list)
     current_day: str = "D1"
+    exercises: list[ExerciseResult] = field(default_factory=list)
     created_at: datetime = field(default_factory=datetime.now)
 
 

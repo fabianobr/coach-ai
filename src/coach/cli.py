@@ -39,15 +39,23 @@ class CoachCLI:
             sys.exit(1)
         return self.system_prompt_path.read_text(encoding="utf-8")
 
-    def _stream_response(self) -> str:
+    def _stream_response(self) -> str | None:
         full_response = ""
         try:
             for chunk in self.provider.stream(self.history, system=self.system_prompt):
                 sys.stdout.write(chunk)
                 sys.stdout.flush()
                 full_response += chunk
+        except (ConnectionError, TimeoutError) as e:
+            print(f"\nNetwork error: Unable to reach LLM provider.")
+            print("Your message was not sent. Please check your connection and try again.")
+            return None
         except Exception as e:
-            print(f"\nError: {e}")
+            print(f"\nUnexpected error while streaming: {type(e).__name__}")
+            print("Message was not saved. Please try again.")
+            import logging
+            logging.getLogger(__name__).error(f"Streaming error: {e}", exc_info=True)
+            return None
         print()
         return full_response
 
@@ -75,5 +83,9 @@ class CoachCLI:
 
         self.history.append(Message(role="user", content=user_input))
         response = self._stream_response()
-        self.history.append(Message(role="assistant", content=response))
+        if response is not None:
+            self.history.append(Message(role="assistant", content=response))
+        else:
+            # On error, remove the user message that wasn't processed
+            self.history.pop()
         return True

@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import uuid
+from typing import AsyncGenerator
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -11,18 +13,38 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-async def _event_generator(history, system_prompt, provider, store, session_id):
+def _format_sse_chunk(chunk: str) -> str:
+    """Format chunk for SSE transmission, escaping newlines per SSE spec."""
+    lines = chunk.split("\n")
+    return "".join(f"data: {line}\n" for line in lines[:-1]) + (f"data: {lines[-1]}\n\n" if lines[-1] else "\n")
+
+
+async def _event_generator(history, system_prompt, provider, store, session_id) -> AsyncGenerator[str, None]:
     full_response = ""
+    error_id = str(uuid.uuid4())[:8]
+    chunks_received = 0
+
     try:
-        for chunk in await asyncio.to_thread(
-            lambda: list(provider.stream(messages=history, system=system_prompt))
-        ):
+        stream_iterator = await asyncio.to_thread(
+            lambda: provider.stream(messages=history, system=system_prompt)
+        )
+        for chunk in stream_iterator:
             full_response += chunk
-            yield f"data: {chunk}\n\n"
-    except Exception as e:
-        logger.error(f"LLM streaming error for session {session_id}: {e}")
-        yield f"data: [ERROR]\n\n"
+            chunks_received += 1
+            yield _format_sse_chunk(chunk)
+    except asyncio.CancelledError:
+        logger.debug(f"Session {session_id} stream cancelled after {chunks_received} chunks")
         return
+    except Exception as e:
+        logger.error(
+            f"LLM streaming error [id={error_id}] for session {session_id} "
+            f"after {chunks_received} chunks: {type(e).__name__}: {e}",
+            exc_info=True
+        )
+        store.append(session_id, Message(role="assistant", content=f"[Error {error_id}]"))
+        yield f"data: [ERROR {error_id}]\n\n"
+        return
+
     store.append(session_id, Message(role="assistant", content=full_response))
     yield "data: [DONE]\n\n"
 

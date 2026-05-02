@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 class ChatRequest(BaseModel):
     session_id: str = Field(..., max_length=128)
-    message: str
+    message: str = Field(..., max_length=32000)
     stream: bool = False
 
 

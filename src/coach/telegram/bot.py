@@ -96,22 +96,25 @@ class CoachBot:
         logger_instance = SessionLogger()
         date_str = datetime.now().strftime("%Y-%m-%d")
 
+        # Record accumulated exercises before saving
+        for exercise in session.exercises:
+            logger_instance.record(exercise)
+
         try:
             await asyncio.to_thread(logger_instance.save, session.current_day, date_str)
             await update.message.reply_text(
                 f"✅ Session complete! Workout saved.\n"
                 f"Great work on {session.current_day}! 💪"
             )
+            self.store.clear(user_id)
         except FileExistsError:
             await update.message.reply_text(
                 f"⚠️ Workout for {date_str} already logged.\n"
-                f"Session data cleared."
+                f"Session data preserved. Use /day to set a new day or continue."
             )
         except Exception as e:
             logger.error(f"Failed to save workout for user {user_id}: {e}")
-            await update.message.reply_text("⚠️ Could not save workout. Session cleared.")
-
-        self.store.clear(user_id)
+            await update.message.reply_text("⚠️ Could not save workout. Session preserved.")
 
     async def handle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user_id = update.effective_user.id
@@ -151,6 +154,12 @@ class CoachBot:
                     )
                 )
             )
+        except Exception as e:
+            logger.error(f"LLM streaming error for user {user_id}: {e}", exc_info=True)
+            await update.message.reply_text("Coach is unavailable. Try again in a moment.")
+            return
+
+        try:
             for chunk in chunks:
                 full_response += chunk
                 buffer += chunk
@@ -161,12 +170,11 @@ class CoachBot:
 
             if buffer:
                 await update.message.reply_text(buffer)
-
-            session.messages.append(Message(role="assistant", content=full_response))
-
         except Exception as e:
-            logger.error(f"LLM error for user {user_id}: {e}")
-            await update.message.reply_text("Coach is unavailable. Try again in a moment.")
+            logger.error(f"Failed to send buffered response to user {user_id}: {e}", exc_info=True)
+            await update.message.reply_text("Error sending response. Please try again.")
+
+        session.messages.append(Message(role="assistant", content=full_response))
 
     async def handle_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await self.handle_start(update, context)
