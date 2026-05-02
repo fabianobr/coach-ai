@@ -11,9 +11,9 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from coach.constants import DAY_LABELS
 from coach.llm import Message, get_provider
 from coach.logger import SessionLogger
+from coach.paths import get_resource_path
 from coach.telegram.user_sessions import UserSessionStore
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -23,22 +23,20 @@ class CoachBot:
         if not self.token:
             raise ValueError("TELEGRAM_BOT_TOKEN not set in environment")
 
-        self.system_prompt_path = Path(__file__).parent.parent.parent / "SYSTEM_PROMPT.md"
-        self.program_path = Path(__file__).parent.parent.parent / "data" / "program.json"
         self.system_prompt: str | None = None
         self.program: dict | None = None
         self.provider = None
         self.store = UserSessionStore()
 
     def load_system_prompt(self) -> None:
-        if not self.system_prompt_path.exists():
-            raise FileNotFoundError(f"SYSTEM_PROMPT.md not found at {self.system_prompt_path}")
-        self.system_prompt = self.system_prompt_path.read_text(encoding="utf-8")
+        path = get_resource_path("SYSTEM_PROMPT.md")
+        self.system_prompt = path.read_text(encoding="utf-8")
 
     def load_program(self) -> None:
-        if not self.program_path.exists():
-            raise FileNotFoundError(f"program.json not found at {self.program_path}")
-        self.program = json.loads(self.program_path.read_text(encoding="utf-8"))
+        program_path = Path(__file__).parent.parent.parent / "data" / "program.json"
+        if not program_path.exists():
+            raise FileNotFoundError(f"program.json not found at {program_path}")
+        self.program = json.loads(program_path.read_text(encoding="utf-8"))
 
     async def run(self) -> None:
         self.load_system_prompt()
@@ -127,13 +125,13 @@ class CoachBot:
         day_data = self.program["days"][session.current_day]
         day_label = day_data.get("label", "Unknown")
 
-        lines = [f"📋 **{session.current_day}: {day_label}** Exercises\n"]
+        lines = [f"📋 *{session.current_day}: {day_label}* Exercises"]
         for ex in day_data.get("exercises", []):
             order = ex.get("order", "?")
             name = ex.get("name", "Unknown")
             lines.append(f"{order}. {name} ⏳")
 
-        await update.message.reply_text("\n".join(lines))
+        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user_id = update.effective_user.id
@@ -144,7 +142,7 @@ class CoachBot:
 
         full_response = ""
         buffer = ""
-        chunk_size = 200
+        max_chunk_size = 3500
 
         try:
             chunks = await asyncio.to_thread(
@@ -164,12 +162,12 @@ class CoachBot:
                 full_response += chunk
                 buffer += chunk
 
-                if len(buffer) >= chunk_size:
-                    await update.message.reply_text(buffer)
+                if len(buffer) >= max_chunk_size:
+                    await update.message.reply_text(buffer, parse_mode="Markdown")
                     buffer = ""
 
             if buffer:
-                await update.message.reply_text(buffer)
+                await update.message.reply_text(buffer, parse_mode="Markdown")
         except Exception as e:
             logger.error(f"Failed to send buffered response to user {user_id}: {e}", exc_info=True)
             await update.message.reply_text("Error sending response. Please try again.")

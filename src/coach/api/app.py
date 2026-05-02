@@ -1,6 +1,5 @@
 import time
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI
 
@@ -8,13 +7,12 @@ from coach.api.routes.chat import router as chat_router
 from coach.api.routes.health import router as health_router
 from coach.api.session_store import SessionStore
 from coach.llm import config_from_env, get_provider
+from coach.paths import get_resource_path
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    system_prompt_path = Path(__file__).parent.parent.parent / "SYSTEM_PROMPT.md"
-    if not system_prompt_path.exists():
-        raise FileNotFoundError(f"SYSTEM_PROMPT.md not found at {system_prompt_path}")
+    system_prompt_path = get_resource_path("SYSTEM_PROMPT.md")
 
     cfg = config_from_env()
     app.state.config = cfg

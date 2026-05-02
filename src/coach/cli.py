@@ -1,12 +1,11 @@
 import sys
-from pathlib import Path
 
 from coach.llm import Message, get_provider
+from coach.paths import get_resource_path
 
 
 class CoachCLI:
     def __init__(self) -> None:
-        self.system_prompt_path = Path(__file__).parent.parent.parent / "SYSTEM_PROMPT.md"
         self.history: list[Message] = []
         self.provider = None
         self.system_prompt: str | None = None
@@ -39,9 +38,11 @@ class CoachCLI:
             sys.exit(0)
 
     def _load_system_prompt(self) -> str:
-        if not self.system_prompt_path.exists():
-            raise FileNotFoundError(f"SYSTEM_PROMPT.md not found at {self.system_prompt_path}")
-        return self.system_prompt_path.read_text(encoding="utf-8")
+        try:
+            path = get_resource_path("SYSTEM_PROMPT.md")
+        except FileNotFoundError as e:
+            raise FileNotFoundError(str(e)) from e
+        return path.read_text(encoding="utf-8")
 
     def _stream_response(self) -> str | None:
         full_response = ""
