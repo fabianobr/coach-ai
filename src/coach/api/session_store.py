@@ -1,6 +1,9 @@
+import logging
 from collections import OrderedDict
 
 from coach.llm import Message
+
+logger = logging.getLogger(__name__)
 
 
 class SessionStore:
@@ -11,7 +14,8 @@ class SessionStore:
     def get_or_create(self, session_id: str) -> list[Message]:
         if session_id not in self.sessions:
             if len(self.sessions) >= self.max_sessions:
-                self.sessions.popitem(last=False)
+                evicted_id = self.sessions.popitem(last=False)[0]
+                logger.warning(f"Evicted oldest session {evicted_id} at capacity {self.max_sessions}")
             self.sessions[session_id] = []
         else:
             self.sessions.move_to_end(session_id)

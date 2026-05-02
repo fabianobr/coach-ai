@@ -48,13 +48,12 @@ def test_regular_message_adds_two_entries():
     assert cli.history[1].role == "assistant"
 
 
-def test_missing_system_prompt_exits():
+def test_missing_system_prompt_raises():
     with patch.object(Path, "exists", return_value=False):
         from src.coach.cli import CoachCLI
         cli = CoachCLI()
-        with pytest.raises(SystemExit) as exc_info:
+        with pytest.raises(FileNotFoundError):
             cli._load_system_prompt()
-        assert exc_info.value.code == 1
 
 
 def test_stream_chunks_are_printed(capsys):

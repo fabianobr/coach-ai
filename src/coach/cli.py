@@ -12,7 +12,12 @@ class CoachCLI:
         self.system_prompt: str | None = None
 
     def run(self) -> None:
-        self.system_prompt = self._load_system_prompt()
+        try:
+            self.system_prompt = self._load_system_prompt()
+        except FileNotFoundError as e:
+            print(f"Error: {e}")
+            sys.exit(1)
+
         try:
             self.provider = get_provider()
         except Exception as e:
@@ -35,8 +40,7 @@ class CoachCLI:
 
     def _load_system_prompt(self) -> str:
         if not self.system_prompt_path.exists():
-            print(f"Error: SYSTEM_PROMPT.md not found at {self.system_prompt_path}")
-            sys.exit(1)
+            raise FileNotFoundError(f"SYSTEM_PROMPT.md not found at {self.system_prompt_path}")
         return self.system_prompt_path.read_text(encoding="utf-8")
 
     def _stream_response(self) -> str | None:
