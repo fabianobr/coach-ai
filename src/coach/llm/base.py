@@ -2,12 +2,12 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Iterator
+from typing import Iterator, Literal
 
 
 @dataclass
 class Message:
-    role: str  # "user" | "assistant"
+    role: Literal["user", "assistant", "system"]
     content: str
 
 
