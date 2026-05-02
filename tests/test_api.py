@@ -127,3 +127,54 @@ def test_missing_session_id_returns_422(api_client):
     client, _ = api_client
     resp = client.post("/chat", json={"message": "no session"})
     assert resp.status_code == 422
+
+
+def test_chat_provider_error_returns_502(api_client):
+    client, mock_provider = api_client
+    mock_provider.chat.side_effect = Exception("API key invalid")
+
+    resp = client.post("/chat", json={"session_id": "error_s", "message": "test"})
+    assert resp.status_code == 502
+    assert "unavailable" in resp.json()["detail"].lower()
+
+
+def test_streaming_provider_error_yields_error_with_id(api_client):
+    client, mock_provider = api_client
+    mock_provider.stream.side_effect = Exception("Connection lost")
+
+    with client.stream(
+        "POST", "/chat",
+        json={"session_id": "stream_error", "message": "test", "stream": True}
+    ) as resp:
+        assert resp.status_code == 200
+        body = resp.read().decode()
+
+    assert "data: [ERROR" in body
+    assert "]" in body  # Error ID is present
+
+
+def test_streaming_error_yields_error_marker(api_client):
+    """Streaming error should yield error marker with correlation ID."""
+    client, mock_provider = api_client
+    mock_provider.stream.side_effect = Exception("Stream failed")
+
+    with client.stream(
+        "POST", "/chat",
+        json={"session_id": "error_marker", "message": "test", "stream": True}
+    ) as resp:
+        body = resp.read().decode()
+
+    # Verify error marker was yielded with correlation ID
+    assert "data: [ERROR" in body
+    # Extract the error ID
+    import re
+    error_match = re.search(r"\[ERROR ([a-f0-9]+)\]", body)
+    assert error_match is not None, "Error should include correlation ID"
+
+
+def test_message_length_cap_enforced(api_client):
+    client, _ = api_client
+    huge_message = "x" * 40000
+
+    resp = client.post("/chat", json={"session_id": "s", "message": huge_message})
+    assert resp.status_code == 422

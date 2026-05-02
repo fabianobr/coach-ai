@@ -95,3 +95,38 @@ def test_user_session_message_accumulation():
     assert session.messages[0].role == "user"
     assert session.messages[1].role == "assistant"
     assert session.messages[2].role == "user"
+
+
+def test_user_session_store_lru_eviction():
+    """LRU eviction should remove oldest session at capacity."""
+    from src.coach.telegram.user_sessions import UserSessionStore
+
+    store = UserSessionStore(max_sessions=3)
+    store.get_or_create(1)
+    store.get_or_create(2)
+    store.get_or_create(3)
+
+    # 4th session triggers eviction of user 1
+    store.get_or_create(4)
+
+    assert 1 not in store.sessions
+    assert 4 in store.sessions
+    assert 2 in store.sessions
+    assert 3 in store.sessions
+
+
+def test_user_session_exercises_field():
+    """UserSession should have exercises field for logger integration."""
+    from src.coach.telegram.user_sessions import UserSessionStore
+    from src.coach.logger import ExerciseResult, ExerciseStatus
+
+    store = UserSessionStore()
+    session = store.get_or_create(555)
+
+    assert session.exercises == []
+    ex = ExerciseResult(
+        name="Squat", sets=5, reps_done=5, weight_kg=100, tonnage_kg=6000,
+        tut_seconds=None, status=ExerciseStatus.DONE
+    )
+    session.exercises.append(ex)
+    assert len(session.exercises) == 1

@@ -65,3 +65,38 @@ def test_stream_chunks_are_printed(capsys):
     captured = capsys.readouterr()
     assert "chunk1" in captured.out
     assert "chunk2" in captured.out
+
+
+def test_stream_error_returns_none():
+    """Stream error should return None (connection error)."""
+    cli, mock_provider = make_cli()
+    mock_provider.stream.side_effect = ConnectionError("Network timeout")
+
+    with patch("sys.stdout", new_callable=StringIO):
+        result = cli._stream_response()
+
+    assert result is None
+
+
+def test_stream_error_rolls_back_history():
+    """Stream error should remove user message from history."""
+    cli, mock_provider = make_cli()
+    mock_provider.stream.side_effect = Exception("Unexpected error")
+
+    with patch("sys.stdout", new_callable=StringIO):
+        cli._handle_input("problematic message")
+
+    assert len(cli.history) == 0  # User message was rolled back
+
+
+def test_provider_initialization_error():
+    """Provider init error should propagate."""
+    from src.coach.cli import CoachCLI
+
+    with patch("src.coach.cli.get_provider", side_effect=Exception("Invalid API key")):
+        with patch.object(Path, "exists", return_value=True), \
+             patch.object(Path, "read_text", return_value="# System Prompt"):
+            cli = CoachCLI()
+            with pytest.raises(SystemExit) as exc_info:
+                cli.run()
+            assert exc_info.value.code == 1

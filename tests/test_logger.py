@@ -151,3 +151,56 @@ def test_clear_resets_results(tmp_path):
     logger.record(make_done_result())
     logger.clear()
     assert logger._results == []
+
+
+# ---------------------------------------------------------------------------
+# Additional coverage: edge cases and error conditions
+# ---------------------------------------------------------------------------
+
+def test_save_with_empty_results(tmp_path):
+    """Empty results should still produce a valid markdown file."""
+    logger = SessionLogger(logs_dir=tmp_path)
+    path = logger.save(day_id="D1", date="2026-05-02", duration_minutes=0)
+    assert path.exists()
+    content = path.read_text()
+    assert "D1" in content
+    assert "Exercises completed | 0" in content
+
+
+def test_save_invalid_day_id_raises(tmp_path):
+    """Invalid day_id should raise ValueError."""
+    logger = SessionLogger(logs_dir=tmp_path)
+    with pytest.raises(ValueError, match="Invalid day_id"):
+        logger.save(day_id="D3", date="2026-05-02")
+
+
+def test_record_skipped_without_weight_allowed(tmp_path):
+    """Skipped exercises don't require weight."""
+    logger = SessionLogger(logs_dir=tmp_path)
+    result = ExerciseResult(
+        name="Bench Press",
+        sets=5,
+        reps_done=5,
+        weight_kg=None,  # Missing but allowed for SKIPPED
+        tonnage_kg=None,
+        tut_seconds=None,
+        status=ExerciseStatus.SKIPPED,
+    )
+    logger.record(result)  # Should not raise
+    assert len(logger._results) == 1
+
+
+def test_record_incomplete_without_weight_allowed(tmp_path):
+    """Incomplete exercises don't require weight."""
+    logger = SessionLogger(logs_dir=tmp_path)
+    result = ExerciseResult(
+        name="Leg Press",
+        sets=4,
+        reps_done=2,
+        weight_kg=None,  # Missing but allowed for INCOMPLETE
+        tonnage_kg=None,
+        tut_seconds=None,
+        status=ExerciseStatus.INCOMPLETE,
+    )
+    logger.record(result)  # Should not raise
+    assert len(logger._results) == 1
