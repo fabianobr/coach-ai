@@ -158,6 +158,15 @@ class CoachBot:
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user_id = update.effective_user.id
+        user_lock = self.store.get_lock(user_id)
+
+        async with user_lock:
+            await self._handle_message_impl(update, context, user_id)
+
+    async def _handle_message_impl(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int
+    ) -> None:
+        """Implementation of message handling with per-user serialization via lock."""
         session = self.store.get_or_create(user_id)
         user_message = update.message.text
 
@@ -170,7 +179,7 @@ class CoachBot:
             logger.warning(f"Failed to send TYPING action to user {user_id}: {e}")
 
         loop = asyncio.get_running_loop()
-        queue: asyncio.Queue = asyncio.Queue()
+        queue: asyncio.Queue[str | object] = asyncio.Queue()
         messages_snapshot = list(session.messages)
         system_prompt = self.system_prompt
 
@@ -184,9 +193,9 @@ class CoachBot:
                     messages=messages_snapshot, system=system_prompt
                 ):
                     loop.call_soon_threadsafe(queue.put_nowait, chunk)
-            except Exception as exc:
+            except Exception:
                 loop.call_soon_threadsafe(queue.put_nowait, _STREAM_END)
-                raise exc
+                raise
             else:
                 loop.call_soon_threadsafe(queue.put_nowait, _STREAM_END)
 
@@ -195,40 +204,60 @@ class CoachBot:
         full_response = ""
         buffer = ""
         max_chunk_size = 3500
+        streaming_succeeded = False
 
         try:
-            while True:
-                chunk = await queue.get()
-                if chunk is _STREAM_END:
-                    break
-                full_response += chunk
-                buffer += chunk
-                if len(buffer) >= max_chunk_size:
-                    try:
-                        await update.message.chat.send_action(ChatAction.TYPING)
-                    except Exception:
-                        pass  # non-critical UX feedback
-                    await self._safe_reply(update.message, buffer)
-                    buffer = ""
-
-            await producer_future  # re-raises LLM-level exceptions here
-
-        except Exception as e:
-            logger.error(f"LLM streaming error for user {user_id}: {e}", exc_info=True)
-            await update.message.reply_text("Coach is unavailable. Try again in a moment.")
-            return
-
-        if buffer:
+            # LLM streaming phase — consume chunks from producer thread
             try:
-                await self._safe_reply(update.message, buffer)
-            except Exception as e:
-                logger.error(
-                    f"Failed to send final buffer to user {user_id} ({type(e).__name__}): {e}",
-                    exc_info=True,
-                )
-                await update.message.reply_text("Error sending response. Please try again.")
+                while True:
+                    chunk = await queue.get()
+                    if chunk is _STREAM_END:
+                        break
+                    full_response += chunk
+                    buffer += chunk
+                    if len(buffer) >= max_chunk_size:
+                        try:
+                            await update.message.chat.send_action(ChatAction.TYPING)
+                        except Exception:
+                            pass  # non-critical UX feedback
+                        try:
+                            await self._safe_reply(update.message, buffer)
+                        except Exception as e:
+                            logger.error(
+                                f"Failed to send chunk for user {user_id}: {e}", exc_info=True
+                            )
+                            raise
+                        buffer = ""
 
-        session.messages.append(Message(role="assistant", content=full_response))
+                # Always await producer to surface any LLM-level exceptions
+                await producer_future
+                streaming_succeeded = True
+
+            except Exception as e:
+                logger.error(f"LLM streaming error for user {user_id}: {e}", exc_info=True)
+                try:
+                    await update.message.reply_text("Coach is unavailable. Try again in a moment.")
+                except Exception as notification_err:
+                    logger.error(
+                        f"Failed to send error notification to user {user_id}: {notification_err}",
+                        exc_info=True,
+                    )
+                return
+
+            # Send final buffer only if streaming succeeded
+            if buffer:
+                try:
+                    await self._safe_reply(update.message, buffer)
+                except Exception as e:
+                    logger.error(
+                        f"Failed to send final buffer to user {user_id} ({type(e).__name__}): {e}",
+                        exc_info=True,
+                    )
+
+        finally:
+            # Append to session history only if streaming succeeded and we have content
+            if streaming_succeeded and full_response:
+                session.messages.append(Message(role="assistant", content=full_response))
 
     async def handle_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await self.handle_start(update, context)
