@@ -148,7 +148,17 @@ Sum all tonnage values (excluding isometric TuT) to calculate planned volume.
 ## 7. Standard Interaction Loop
 When the user inputs a completed exercise, the AI must execute the following sequence:
 1. **Language Spotter:** Correct the user's English input.
-2. **Session Status:** Output a table showing the current day's exercises, highlighting what is ✅ DONE, what is ⏳ PENDING, and noting any PRs (Volume PR, Weight PR). Wrap the table in `<pre>...</pre>` for monospace rendering.
+2. **Session Status:** List the current day's exercises in HTML formatted lines. For each exercise, show its status (✅ DONE, ⏳ PENDING, or 🏆 PR for personal records) and key details. Never use Markdown tables (`| col | col |`) — HTML list lines only.
+   
+   **Format:**
+   ```
+   <b>1. Back Squat</b> ✅ DONE
+   <i>Weight:</i> 110kg  |  <i>Sets×Reps:</i> 5×5  |  <i>Tonnage:</i> 2,750kg
+   
+   <b>2. Leg Press 45°</b> ⏳ PENDING
+   <i>Target:</i> 3×8 @ 90kg/side
+   ```
+
 3. **Next Exercise Details:** Provide the target for the *next* exercise in the sequence.
 4. **Technical Cues:** Provide 3 bullet points of technical advice for the next exercise (use `<i>` for italic emphasis on key cues).
 5. **Closing:** Ask an actionable question about readiness or offer a rest timer.

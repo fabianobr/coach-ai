@@ -1,12 +1,51 @@
 import re
 
 
+def _convert_markdown_tables(text: str) -> str:
+    """
+    Convert Markdown table blocks (lines starting with |) to <pre> blocks.
+    Removes separator rows and wraps data rows in monospace formatting.
+    """
+    lines = text.split("\n")
+    result = []
+    i = 0
+
+    while i < len(lines):
+        # Check if this line starts a table (begins with |)
+        if lines[i].strip().startswith("|"):
+            table_lines = []
+            # Collect consecutive | lines
+            while i < len(lines) and lines[i].strip().startswith("|"):
+                table_lines.append(lines[i])
+                i += 1
+
+            # Filter out separator rows (contain only |, -, :, spaces)
+            data_rows = [
+                line
+                for line in table_lines
+                if not re.match(r"^\s*\|[\s|:-]+\|\s*$", line)
+            ]
+
+            if data_rows:
+                # Wrap in <pre> for monospace rendering
+                table_content = "\n".join(data_rows)
+                result.append(f"<pre>{table_content}</pre>")
+        else:
+            result.append(lines[i])
+            i += 1
+
+    return "\n".join(result)
+
+
 def markdown_to_html(text: str) -> str:
     """
     Convert Markdown syntax to Telegram HTML formatting.
-    Handles: **bold**, *italic*, `code`, ```code blocks```, and # headings.
+    Handles: **bold**, *italic*, `code`, ```code blocks```, # headings, and tables.
     Leaves existing HTML tags untouched.
     """
+    # 0. Markdown tables → <pre> blocks
+    text = _convert_markdown_tables(text)
+
     # Use placeholders to protect code blocks from further processing
     # Use a format that won't be affected by Markdown conversion (no underscores)
     code_blocks = {}

@@ -476,3 +476,131 @@ line 2
         result = markdown_to_html("Use **bold** & `code`")
         assert "<b>bold</b>" in result
         assert "<code>code</code>" in result
+
+
+class TestMarkdownTableConverter:
+    """Test the Markdown table-to-<pre> converter for LLM-generated tables."""
+
+    def test_simple_table_wrapped_in_pre(self):
+        """Single Markdown table should be wrapped in <pre>.</pre>"""
+        table = """| # | Exercise |
+|---|----------|
+| 1 | Back Squat |"""
+        result = markdown_to_html(table)
+        assert "<pre>" in result
+        assert "</pre>" in result
+        # Separator row should be removed
+        assert "|---|" not in result
+        # Data rows should remain
+        assert "| # | Exercise |" in result
+        assert "| 1 | Back Squat |" in result
+
+    def test_multi_row_table(self):
+        """Multi-row table should strip separators and wrap in <pre>."""
+        table = """| # | Status | Exercise |
+|---|--------|----------|
+| 1 | ✅ DONE | Back Squat |
+| 2 | ⏳ PENDING | Leg Press |"""
+        result = markdown_to_html(table)
+        assert "<pre>" in result
+        assert "| # | Status | Exercise |" in result
+        assert "| 1 | ✅ DONE | Back Squat |" in result
+        assert "| 2 | ⏳ PENDING | Leg Press |" in result
+        # Separators removed
+        assert "|---|" not in result
+        assert "|--------|" not in result
+
+    def test_table_followed_by_text(self):
+        """Table block followed by normal text should only wrap the table."""
+        text = """| # | Exercise |
+|---|----------|
+| 1 | Squat |
+
+Now let's continue."""
+        result = markdown_to_html(text)
+        assert "<pre>" in result
+        assert "| # | Exercise |" in result
+        assert "Now let's continue." in result
+        # The non-table text should not be in <pre>
+        assert "<pre>Now" not in result
+
+    def test_text_followed_by_table(self):
+        """Normal text followed by table should only wrap the table."""
+        text = """Status update:
+
+| # | Exercise |
+|---|----------|
+| 1 | Squat |"""
+        result = markdown_to_html(text)
+        assert "Status update:" in result
+        assert "<pre>" in result
+        assert "| # | Exercise |" in result
+
+    def test_multiple_tables(self):
+        """Multiple separate tables should each be wrapped."""
+        text = """| # | A |
+|---|---|
+| 1 | X |
+
+Some text in between.
+
+| # | B |
+|---|---|
+| 2 | Y |"""
+        result = markdown_to_html(text)
+        # Count <pre> tags
+        pre_count = result.count("<pre>")
+        assert pre_count == 2
+        # Both tables present
+        assert "| # | A |" in result
+        assert "| # | B |" in result
+
+    def test_no_table_unchanged(self):
+        """Text with no tables should pass through unchanged."""
+        text = "No pipes here, just regular text."
+        result = markdown_to_html(text)
+        assert result == text
+        assert "<pre>" not in result
+
+    def test_already_html_pre_unchanged(self):
+        """<pre> blocks already in HTML should not be modified."""
+        text = "<pre>Already pre-formatted code</pre>"
+        result = markdown_to_html(text)
+        assert "<pre>Already pre-formatted code</pre>" in result
+
+    def test_session_status_format(self):
+        """Test typical Session Status table from LLM response."""
+        session_status = """| # | Status | Exercise       | Weight  | Sets×Reps |
+|----|--------|----------------|---------|-----------|
+| 1  | ✅ DONE | Back Squat     | 110kg   | 5×5       |
+| 2  | ⏳ PENDING | Leg Press 45° | 90kg/side | 3×8   |"""
+        result = markdown_to_html(session_status)
+        assert "<pre>" in result
+        assert "✅ DONE" in result
+        assert "⏳ PENDING" in result
+        # Separators removed
+        assert "|----|" not in result
+        assert "|--------|" not in result
+
+    def test_table_with_complex_content(self):
+        """Table with formatting and special chars should be wrapped correctly."""
+        table = """| Exercise | Notes |
+|----------|-------|
+| **Squat** | `45kg/side` |"""
+        result = markdown_to_html(table)
+        assert "<pre>" in result
+        # The table itself is wrapped, but **bold** inside table converts too
+        assert "<b>Squat</b>" in result
+        assert "<code>45kg/side</code>" in result
+
+    def test_table_with_line_breaks(self):
+        """Table preserves line breaks within the table block."""
+        table = """| # | Exercise |
+|---|----------|
+| 1 | Squat |
+| 2 | Bench |"""
+        result = markdown_to_html(table)
+        assert "<pre>" in result
+        # Both rows present with structure intact
+        assert "| 1 | Squat |" in result
+        assert "| 2 | Bench |" in result
