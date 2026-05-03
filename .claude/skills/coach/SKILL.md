@@ -10,7 +10,7 @@ Activate this skill when the user:
 
 ## Behavior
 
-Load the system prompt from `SYSTEM_PROMPT.md` at the root of this repository and follow it strictly.
+Load the system prompt from `prompts/SYSTEM_PROMPT.md` and follow it strictly.
 
 ### Interaction Loop (execute in order)
 
@@ -47,7 +47,7 @@ Load the system prompt from `SYSTEM_PROMPT.md` at the root of this repository an
 - Isometric holds: no tonnage — track as TuT (Time under Tension) in seconds
 
 ## Files Referenced
-- `SYSTEM_PROMPT.md` — full behavior definition
+- `prompts/SYSTEM_PROMPT.md` — full behavior definition
 - `data/program.json` — training program data
 - `templates/daily_tracking_table.md` — per-session tracking table
 - `templates/evolution_chart.md` — weekly progress chart

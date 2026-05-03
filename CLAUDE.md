@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 1. **Tracks gym workouts** — 4-day Powerbuilding split (D1/D2/D4/D5), tonnage calculation, progressive overload, PR detection
 2. **Corrects English** — every interaction starts with a "Language Spotter" block fixing the user's grammar/vocabulary
 
-The full AI behavior is defined in `SYSTEM_PROMPT.md`. The Claude Code skill is in `.claude/skills/coach/SKILL.md`.
+The full AI behavior is defined in `prompts/SYSTEM_PROMPT.md`. The Claude Code skill is in `.claude/skills/coach/SKILL.md`.
 
 ## Commands
 
@@ -39,9 +39,9 @@ ruff format src/ tests/
 
 coach-ai runs in **two independent runtimes**:
 
-1. **Claude Code skill (current user entry point)** — `.claude/skills/coach/SKILL.md` loads `SYSTEM_PROMPT.md`, `data/program.json`, and `templates/*.md` to deliver the full dual-role coaching experience directly inside Claude Code.
+1. **Claude Code skill (current user entry point)** — `.claude/skills/coach/SKILL.md` loads `prompts/SYSTEM_PROMPT.md`, `data/program.json`, and `templates/*.md` to deliver the full dual-role coaching experience directly inside Claude Code.
 
-2. **Python LLM library (`src/coach/llm/`)** — Provider-agnostic chat client for future CLI, REST, and Telegram entry points. The Python layer does **not** currently load `SYSTEM_PROMPT.md`—that integration is planned (see Next Steps).
+2. **Python LLM library (`src/coach/llm/`)** — Provider-agnostic chat client for future CLI, REST, and Telegram entry points. The Python layer does **not** currently load `prompts/SYSTEM_PROMPT.md`—that integration is planned (see Next Steps).
 
 ### LLM Abstraction Layer (`src/coach/llm/`)
 
