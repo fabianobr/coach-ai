@@ -18,6 +18,9 @@ from coach.telegram.user_sessions import UserSessionStore
 
 logger = logging.getLogger(__name__)
 
+# Sentinel for end-of-stream in asyncio.Queue to prevent collision with falsy chunks
+_STREAM_END = object()
+
 
 class CoachBot:
     def __init__(self) -> None:
@@ -112,9 +115,12 @@ class CoachBot:
                 f"⚠️ Workout for {date_str} already logged.\n"
                 f"Session data preserved. Use /day to set a new day or continue."
             )
+        except (PermissionError, OSError) as e:
+            logger.error(f"File system error saving workout for user {user_id}: {e}", exc_info=True)
+            await update.message.reply_text("⚠️ Storage error. Workout could not be saved.")
         except Exception as e:
-            logger.error(f"Failed to save workout for user {user_id}: {e}")
-            await update.message.reply_text("⚠️ Could not save workout. Session preserved.")
+            logger.error(f"Unexpected error saving workout for user {user_id}: {e}", exc_info=True)
+            await update.message.reply_text("⚠️ Session preserved. Workout data could not be saved.")
 
     async def handle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user_id = update.effective_user.id
@@ -138,13 +144,17 @@ class CoachBot:
     async def _safe_reply(self, message, text: str) -> None:
         """
         Send text with Markdown formatting. If Telegram rejects the markup
-        (unmatched *, _, `), fall back silently to plain text.
+        (unmatched *, _, `), fall back to plain text. Propagate unrecoverable errors.
         """
         try:
             await message.reply_text(text, parse_mode="Markdown")
         except BadRequest as e:
             logger.warning(f"Markdown rejected by Telegram ({e}); retrying as plain text")
-            await message.reply_text(text)
+            try:
+                await message.reply_text(text)
+            except Exception as fallback_err:
+                logger.error(f"Plain-text fallback also failed: {fallback_err}", exc_info=True)
+                raise
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user_id = update.effective_user.id
@@ -154,10 +164,13 @@ class CoachBot:
         session.messages.append(Message(role="user", content=user_message))
 
         # Show "typing…" immediately — gives instant feedback while LLM warms up
-        await update.message.chat.send_action(ChatAction.TYPING)
+        try:
+            await update.message.chat.send_action(ChatAction.TYPING)
+        except Exception as e:
+            logger.warning(f"Failed to send TYPING action to user {user_id}: {e}")
 
         loop = asyncio.get_running_loop()
-        queue: asyncio.Queue[str | None] = asyncio.Queue()
+        queue: asyncio.Queue = asyncio.Queue()
         messages_snapshot = list(session.messages)
         system_prompt = self.system_prompt
 
@@ -172,10 +185,10 @@ class CoachBot:
                 ):
                     loop.call_soon_threadsafe(queue.put_nowait, chunk)
             except Exception as exc:
-                loop.call_soon_threadsafe(queue.put_nowait, None)
+                loop.call_soon_threadsafe(queue.put_nowait, _STREAM_END)
                 raise exc
             else:
-                loop.call_soon_threadsafe(queue.put_nowait, None)
+                loop.call_soon_threadsafe(queue.put_nowait, _STREAM_END)
 
         producer_future = loop.run_in_executor(None, _producer)
 
@@ -186,11 +199,15 @@ class CoachBot:
         try:
             while True:
                 chunk = await queue.get()
-                if chunk is None:
+                if chunk is _STREAM_END:
                     break
                 full_response += chunk
                 buffer += chunk
                 if len(buffer) >= max_chunk_size:
+                    try:
+                        await update.message.chat.send_action(ChatAction.TYPING)
+                    except Exception:
+                        pass  # non-critical UX feedback
                     await self._safe_reply(update.message, buffer)
                     buffer = ""
 
@@ -205,7 +222,10 @@ class CoachBot:
             try:
                 await self._safe_reply(update.message, buffer)
             except Exception as e:
-                logger.error(f"Failed to send buffer to user {user_id}: {e}", exc_info=True)
+                logger.error(
+                    f"Failed to send final buffer to user {user_id} ({type(e).__name__}): {e}",
+                    exc_info=True,
+                )
                 await update.message.reply_text("Error sending response. Please try again.")
 
         session.messages.append(Message(role="assistant", content=full_response))
