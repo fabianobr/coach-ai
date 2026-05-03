@@ -6,6 +6,8 @@ from datetime import datetime
 from pathlib import Path
 
 from telegram import Update
+from telegram.constants import ChatAction
+from telegram.error import BadRequest
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 from coach.constants import DAY_LABELS
@@ -133,6 +135,17 @@ class CoachBot:
 
         await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
+    async def _safe_reply(self, message, text: str) -> None:
+        """
+        Send text with Markdown formatting. If Telegram rejects the markup
+        (unmatched *, _, `), fall back silently to plain text.
+        """
+        try:
+            await message.reply_text(text, parse_mode="Markdown")
+        except BadRequest as e:
+            logger.warning(f"Markdown rejected by Telegram ({e}); retrying as plain text")
+            await message.reply_text(text)
+
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user_id = update.effective_user.id
         session = self.store.get_or_create(user_id)
@@ -140,37 +153,60 @@ class CoachBot:
 
         session.messages.append(Message(role="user", content=user_message))
 
+        # Show "typing…" immediately — gives instant feedback while LLM warms up
+        await update.message.chat.send_action(ChatAction.TYPING)
+
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue[str | None] = asyncio.Queue()
+        messages_snapshot = list(session.messages)
+        system_prompt = self.system_prompt
+
+        def _producer() -> None:
+            """
+            Runs in a thread-pool. Feeds sync generator chunks into the async
+            queue via call_soon_threadsafe (the only safe cross-thread call).
+            """
+            try:
+                for chunk in self.provider.stream(
+                    messages=messages_snapshot, system=system_prompt
+                ):
+                    loop.call_soon_threadsafe(queue.put_nowait, chunk)
+            except Exception as exc:
+                loop.call_soon_threadsafe(queue.put_nowait, None)
+                raise exc
+            else:
+                loop.call_soon_threadsafe(queue.put_nowait, None)
+
+        producer_future = loop.run_in_executor(None, _producer)
+
         full_response = ""
         buffer = ""
         max_chunk_size = 3500
 
         try:
-            chunks = await asyncio.to_thread(
-                lambda: list(
-                    self.provider.stream(
-                        messages=list(session.messages), system=self.system_prompt
-                    )
-                )
-            )
+            while True:
+                chunk = await queue.get()
+                if chunk is None:
+                    break
+                full_response += chunk
+                buffer += chunk
+                if len(buffer) >= max_chunk_size:
+                    await self._safe_reply(update.message, buffer)
+                    buffer = ""
+
+            await producer_future  # re-raises LLM-level exceptions here
+
         except Exception as e:
             logger.error(f"LLM streaming error for user {user_id}: {e}", exc_info=True)
             await update.message.reply_text("Coach is unavailable. Try again in a moment.")
             return
 
-        try:
-            for chunk in chunks:
-                full_response += chunk
-                buffer += chunk
-
-                if len(buffer) >= max_chunk_size:
-                    await update.message.reply_text(buffer, parse_mode="Markdown")
-                    buffer = ""
-
-            if buffer:
-                await update.message.reply_text(buffer, parse_mode="Markdown")
-        except Exception as e:
-            logger.error(f"Failed to send buffered response to user {user_id}: {e}", exc_info=True)
-            await update.message.reply_text("Error sending response. Please try again.")
+        if buffer:
+            try:
+                await self._safe_reply(update.message, buffer)
+            except Exception as e:
+                logger.error(f"Failed to send buffer to user {user_id}: {e}", exc_info=True)
+                await update.message.reply_text("Error sending response. Please try again.")
 
         session.messages.append(Message(role="assistant", content=full_response))
 
