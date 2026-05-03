@@ -6,12 +6,12 @@ from datetime import datetime
 from pathlib import Path
 
 from telegram import Update
-from telegram.constants import ChatAction
+from telegram.constants import ChatAction, ParseMode
 from telegram.error import BadRequest
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 from coach.constants import DAY_LABELS
-from coach.day_plan import render_day_plan_table, render_day_plan_summary
+from coach.day_plan import render_day_plan_formatted_list, render_day_plan_summary
 from coach.llm import Message, get_provider
 from coach.logger import SessionLogger
 from coach.paths import get_resource_path
@@ -68,12 +68,13 @@ class CoachBot:
         user_id = update.effective_user.id
         self.store.get_or_create(user_id)
         await update.message.reply_text(
-            "Welcome to Coach AI! 🏋️\n\n"
+            "Welcome to <b>Coach AI</b>! 🏋️\n\n"
             "Send me a workout message or use:\n"
-            "/day D1 — Set training day (D1/D2/D4/D5)\n"
-            "/status — See today's exercises\n"
-            "/done — End session & save log\n"
-            "/help — Show this message"
+            "<code>/day D1</code> — Set training day (D1/D2/D4/D5)\n"
+            "<code>/status</code> — See today's exercises\n"
+            "<code>/done</code> — End session &amp; save log\n"
+            "<code>/help</code> — Show this message",
+            parse_mode=ParseMode.HTML
         )
 
     async def handle_day(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -81,30 +82,30 @@ class CoachBot:
         session = self.store.get_or_create(user_id)
 
         if not context.args or len(context.args) == 0:
-            await update.message.reply_text("Usage: /day D1 (or D2, D4, D5)")
+            await update.message.reply_text("Usage: <code>/day D1</code> (or D2, D4, D5)", parse_mode=ParseMode.HTML)
             return
 
         day_id = context.args[0].upper()
         if day_id not in ["D1", "D2", "D4", "D5"]:
-            await update.message.reply_text("Invalid day. Use: D1, D2, D4, or D5")
+            await update.message.reply_text("Invalid day. Use: <code>D1</code>, <code>D2</code>, <code>D4</code>, or <code>D5</code>", parse_mode=ParseMode.HTML)
             return
 
         session.current_day = day_id
         day_label = DAY_LABELS.get(day_id, "Unknown")
 
         # Render Day Plan table with weights and tonnage
-        reply_lines = [f"✅ Training day set to {day_id} ({day_label})"]
+        reply_lines = [f"✅ Training day set to <b>{day_id}</b> (<b>{day_label}</b>)"]
 
         if self.program and day_id in self.program.get("days", {}):
             day_data = self.program["days"][day_id]
             exercises = day_data.get("exercises", [])
             exercise_count = len(exercises)
 
-            # Render table
-            table, total_volume = render_day_plan_table(self.program, day_id)
-            if table:
+            # Render formatted list with HTML styling
+            formatted_list, total_volume = render_day_plan_formatted_list(self.program, day_id)
+            if formatted_list:
                 reply_lines.append("")
-                reply_lines.append(f"```\n{table}\n```")
+                reply_lines.append(formatted_list)
                 reply_lines.append("")
                 reply_lines.append(render_day_plan_summary(day_id, total_volume, exercise_count))
 
@@ -125,27 +126,29 @@ class CoachBot:
             await asyncio.to_thread(logger_instance.save, session.current_day, date_str)
             await update.message.reply_text(
                 f"✅ Session complete! Workout saved.\n"
-                f"Great work on {session.current_day}! 💪"
+                f"Great work on <b>{session.current_day}</b>! 💪",
+                parse_mode=ParseMode.HTML
             )
             self.store.clear(user_id)
         except FileExistsError:
             await update.message.reply_text(
-                f"⚠️ Workout for {date_str} already logged.\n"
-                f"Session data preserved. Use /day to set a new day or continue."
+                f"⚠️ Workout for <b>{date_str}</b> already logged.\n"
+                f"Session data preserved. Use /day to set a new day or continue.",
+                parse_mode=ParseMode.HTML
             )
         except (PermissionError, OSError) as e:
             logger.error(f"File system error saving workout for user {user_id}: {e}", exc_info=True)
-            await update.message.reply_text("⚠️ Storage error. Workout could not be saved.")
+            await update.message.reply_text("⚠️ Storage error. Workout could not be saved.", parse_mode=ParseMode.HTML)
         except Exception as e:
             logger.error(f"Unexpected error saving workout for user {user_id}: {e}", exc_info=True)
-            await update.message.reply_text("⚠️ Session preserved. Workout data could not be saved.")
+            await update.message.reply_text("⚠️ Session preserved. Workout data could not be saved.", parse_mode=ParseMode.HTML)
 
     async def handle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user_id = update.effective_user.id
         session = self.store.get_or_create(user_id)
 
         if not self.program or session.current_day not in self.program.get("days", {}):
-            await update.message.reply_text("Unable to load training program")
+            await update.message.reply_text("Unable to load training program", parse_mode=ParseMode.HTML)
             return
 
         day_data = self.program["days"][session.current_day]
@@ -153,13 +156,13 @@ class CoachBot:
         exercises = day_data.get("exercises", [])
         exercise_count = len(exercises)
 
-        # Use Day Plan table format
-        reply_lines = [f"📋 *{session.current_day}: {day_label}* Exercises"]
+        # Use Day Plan formatted list with HTML styling
+        reply_lines = [f"📋 <b>{session.current_day}: {day_label}</b> Exercises"]
 
-        table, total_volume = render_day_plan_table(self.program, session.current_day)
-        if table:
+        formatted_list, total_volume = render_day_plan_formatted_list(self.program, session.current_day)
+        if formatted_list:
             reply_lines.append("")
-            reply_lines.append(f"```\n{table}\n```")
+            reply_lines.append(formatted_list)
             reply_lines.append("")
             reply_lines.append(render_day_plan_summary(session.current_day, total_volume, exercise_count))
 
@@ -167,13 +170,13 @@ class CoachBot:
 
     async def _safe_reply(self, message, text: str) -> None:
         """
-        Send text with Markdown formatting. If Telegram rejects the markup
-        (unmatched *, _, `), fall back to plain text. Propagate unrecoverable errors.
+        Send text with HTML formatting. If Telegram rejects the markup,
+        fall back to plain text. Propagate unrecoverable errors.
         """
         try:
-            await message.reply_text(text, parse_mode="Markdown")
+            await message.reply_text(text, parse_mode=ParseMode.HTML)
         except BadRequest as e:
-            logger.warning(f"Markdown rejected by Telegram ({e}); retrying as plain text")
+            logger.warning(f"HTML rejected by Telegram ({e}); retrying as plain text")
             try:
                 await message.reply_text(text)
             except Exception as fallback_err:

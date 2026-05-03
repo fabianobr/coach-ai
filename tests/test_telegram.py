@@ -200,16 +200,16 @@ async def test_handle_message_streams_and_appends_assistant_message(bot_with_moc
     assert assistant_msgs[0].content == "Hello World"
 
 
-async def test_handle_message_falls_back_to_plain_text_on_bad_markdown(bot_with_mock_provider):
+async def test_handle_message_falls_back_to_plain_text_on_bad_html(bot_with_mock_provider):
     """
-    When Telegram rejects the Markdown-formatted reply_text with BadRequest,
+    When Telegram rejects the HTML-formatted reply_text with BadRequest,
     _safe_reply must retry the same text without parse_mode (plain text),
     and must NOT emit 'Error sending response'.
     """
     bot = bot_with_mock_provider
 
-    # Provider yields a chunk with an unmatched asterisk that triggers BadRequest.
-    bot.provider.stream.return_value = iter(["Great job *athlete"])
+    # Provider yields a chunk with malformed HTML that triggers BadRequest.
+    bot.provider.stream.return_value = iter(["Great job <b>athlete"])
 
     mock_message = MagicMock()
     mock_message.text = "Done my sets"
@@ -221,8 +221,8 @@ async def test_handle_message_falls_back_to_plain_text_on_bad_markdown(bot_with_
     async def selective_reply(text, **kwargs):
         nonlocal call_count
         call_count += 1
-        # First call uses parse_mode="Markdown" — reject it.
-        if kwargs.get("parse_mode") == "Markdown":
+        # First call uses parse_mode="HTML" — reject it.
+        if kwargs.get("parse_mode") == "HTML":
             raise BadRequest("Can't parse entities")
         # Second call (plain text) should succeed silently.
 
@@ -234,14 +234,14 @@ async def test_handle_message_falls_back_to_plain_text_on_bad_markdown(bot_with_
 
     await bot.handle_message(mock_update, MagicMock())
 
-    # Two reply_text calls total: one Markdown (rejected), one plain.
+    # Two reply_text calls total: one HTML (rejected), one plain.
     assert call_count == 2
 
     # The session still has the assistant message (stream succeeded).
     session = bot.store.get_or_create(8888)
     assistant_msgs = [m for m in session.messages if m.role == "assistant"]
     assert len(assistant_msgs) == 1
-    assert assistant_msgs[0].content == "Great job *athlete"
+    assert assistant_msgs[0].content == "Great job <b>athlete"
 
 
 @pytest.mark.asyncio

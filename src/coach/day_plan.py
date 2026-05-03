@@ -119,14 +119,14 @@ def render_day_plan_table(program: dict, day_id: str) -> tuple[str, float]:
     day_data = program["days"][day_id]
     exercises = day_data.get("exercises", [])
 
-    # Column widths derived from max data lengths across all exercises
+    # Column widths optimized for mobile Telegram (fits ~65 chars with pipes/spaces)
     col_widths = {
-        "#": 2,
-        "Exercise": 23,
-        "Weight": 16,
-        "Sets×Reps": 9,
-        "Tonnage": 10,
-        "Notes": 5,
+        "#": 1,
+        "Exercise": 13,
+        "Weight": 11,
+        "Sets×Reps": 8,
+        "Tonnage": 8,
+        "Notes": 2,
     }
 
     def left_pad(text: str, width: int) -> str:
@@ -186,6 +186,52 @@ def render_day_plan_table(program: dict, day_id: str) -> tuple[str, float]:
     return table, total_volume
 
 
+def render_day_plan_formatted_list(program: dict, day_id: str) -> tuple[str, float]:
+    """
+    Render a Day Plan as a formatted list with HTML styling (Telegram HTML mode).
+    Returns (formatted_html, total_volume_kg).
+
+    Format:
+    <b>1. Exercise Name</b>
+       Weight: XXkg | Sets×Reps: N×N | Tonnage: XXXXkg
+
+    Optimized for mobile Telegram display with proper visual hierarchy.
+    """
+    if day_id not in program.get("days", {}):
+        return "", 0.0
+
+    day_data = program["days"][day_id]
+    exercises = day_data.get("exercises", [])
+    total_volume = 0.0
+    lines = []
+
+    for ex in exercises:
+        order = ex.get("order", "?")
+        name = ex.get("name", "Unknown")
+        weight = format_weight(ex)
+        sets_reps = format_sets_reps(ex)
+        tonnage_str = format_tonnage(ex)
+
+        # Calculate total volume (only non-isometric)
+        tonnage_val = calculate_tonnage(ex)
+        if isinstance(tonnage_val, (int, float)):
+            total_volume += tonnage_val
+
+        # Add superset note if applicable
+        superset_note = " <i>(SS)</i>" if ex.get("superset_with") else ""
+
+        # Format: bold heading + indented data row
+        lines.append(f"<b>{order}. {name}</b>{superset_note}")
+        lines.append(f"   <i>Weight:</i> {weight} | <i>Sets×Reps:</i> {sets_reps} | <i>Tonnage:</i> {tonnage_str}")
+        lines.append("")  # Blank line between exercises
+
+    # Remove last blank line
+    if lines and lines[-1] == "":
+        lines.pop()
+
+    return "\n".join(lines), total_volume
+
+
 def render_day_plan_summary(day_id: str, total_volume: float, exercise_count: int) -> str:
     """Render the Day Plan summary line showing total volume and exercise count."""
-    return f"> **Planned Volume:** {int(total_volume):,} kg | **Exercises:** {exercise_count}"
+    return f"<b>Planned Volume:</b> {int(total_volume):,} kg  |  <b>Exercises:</b> {exercise_count}"
