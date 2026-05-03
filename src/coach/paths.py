@@ -48,7 +48,11 @@ def get_resource_path(resource_name: str) -> Path:
         pass
 
     # Fallback to git tree path (development)
-    git_path = Path(__file__).parent.parent.parent / resource_name
+    repo_root = Path(__file__).parent.parent.parent
+    # Check prompts/ subdirectory first for .md prompt files
+    git_path = repo_root / "prompts" / resource_name
+    if not git_path.exists():
+        git_path = repo_root / resource_name
     if git_path.exists():
         return git_path
 

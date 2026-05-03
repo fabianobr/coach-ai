@@ -33,7 +33,7 @@ class CoachBot:
         self.system_prompt = path.read_text(encoding="utf-8")
 
     def load_program(self) -> None:
-        program_path = Path(__file__).parent.parent.parent / "data" / "program.json"
+        program_path = Path(__file__).parent.parent.parent.parent / "data" / "program.json"
         if not program_path.exists():
             raise FileNotFoundError(f"program.json not found at {program_path}")
         self.program = json.loads(program_path.read_text(encoding="utf-8"))
