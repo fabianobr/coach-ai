@@ -242,3 +242,65 @@ async def test_handle_message_falls_back_to_plain_text_on_bad_markdown(bot_with_
     assistant_msgs = [m for m in session.messages if m.role == "assistant"]
     assert len(assistant_msgs) == 1
     assert assistant_msgs[0].content == "Great job *athlete"
+
+
+@pytest.mark.asyncio
+async def test_safe_reply_fallback_also_fails(bot_with_mock_provider):
+    """
+    Test that when both Markdown parsing and plain-text fallback fail,
+    the exception propagates (not silently swallowed).
+    """
+    bot = bot_with_mock_provider
+    message = MagicMock()
+
+    # First call (Markdown) raises BadRequest
+    # Second call (fallback, plain text) raises a different error
+    from telegram.error import BadRequest
+    reply_text_side_effect = [
+        BadRequest("can't parse entities"),
+        Exception("Network timeout"),
+    ]
+    message.reply_text = AsyncMock(side_effect=reply_text_side_effect)
+
+    # Should propagate the fallback error
+    with pytest.raises(Exception, match="Network timeout"):
+        await bot._safe_reply(message, "test response")
+
+    # Verify both calls were made (one for Markdown, one for fallback)
+    assert message.reply_text.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_handle_message_typing_action_failure_does_not_abort(bot_with_mock_provider):
+    """
+    Test that if send_action(ChatAction.TYPING) fails, handle_message
+    continues and completes successfully.
+    """
+    bot = bot_with_mock_provider
+
+    update = MagicMock()
+    context = MagicMock()
+    user_id = 9999
+
+    update.effective_user.id = user_id
+    update.message.text = "squat PR!"
+
+    # Typing action fails (initial call)
+    # But must succeed on heartbeat (mid-stream call)
+    typing_side_effects = [
+        Exception("Telegram unreachable"),  # initial TYPING fails
+        None,  # heartbeat TYPING succeeds
+    ]
+    update.message.chat.send_action = AsyncMock(side_effect=typing_side_effects)
+
+    # Mock reply_text for _safe_reply
+    update.message.reply_text = AsyncMock()
+
+    # Should not raise; should complete successfully
+    await bot.handle_message(update, context)
+
+    # Verify session was updated with assistant message despite initial typing failure
+    session = bot.store.get_or_create(user_id)
+    assistant_msgs = [m for m in session.messages if m.role == "assistant"]
+    assert len(assistant_msgs) == 1
+    assert "Hello World" in assistant_msgs[0].content
