@@ -15,6 +15,7 @@ from coach.day_plan import render_day_plan_formatted_list, render_day_plan_summa
 from coach.llm import Message, get_provider
 from coach.logger import SessionLogger
 from coach.paths import get_resource_path
+from coach.telegram.formatting import markdown_to_html
 from coach.telegram.user_sessions import UserSessionStore
 
 logger = logging.getLogger(__name__)
@@ -170,9 +171,10 @@ class CoachBot:
 
     async def _safe_reply(self, message, text: str) -> None:
         """
-        Send text with HTML formatting. If Telegram rejects the markup,
-        fall back to plain text. Propagate unrecoverable errors.
+        Send text with HTML formatting. Converts any leaked Markdown to HTML first.
+        If Telegram rejects the markup, fall back to plain text. Propagate unrecoverable errors.
         """
+        text = markdown_to_html(text)
         try:
             await message.reply_text(text, parse_mode=ParseMode.HTML)
         except BadRequest as e:

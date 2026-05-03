@@ -12,6 +12,7 @@ import pytest
 from telegram.constants import ParseMode
 
 from src.coach.day_plan import render_day_plan_summary, render_day_plan_formatted_list
+from src.coach.telegram.formatting import markdown_to_html
 
 
 def load_program():
@@ -348,3 +349,258 @@ class TestMessageParseMode:
             call_args = update.message.reply_text.call_args
             assert call_args.kwargs.get("parse_mode") == ParseMode.HTML or \
                    call_args.kwargs.get("parse_mode") == "HTML"
+
+
+class TestMarkdownToHtml:
+    """Test the markdown_to_html converter for safety-net LLM response handling."""
+
+    def test_bold_double_asterisk(self):
+        """Convert **bold** → <b>bold</b>."""
+        result = markdown_to_html("This is **bold** text")
+        assert result == "This is <b>bold</b> text"
+
+    def test_bold_double_underscore(self):
+        """Convert __bold__ → <b>bold</b>."""
+        result = markdown_to_html("This is __bold__ text")
+        assert result == "This is <b>bold</b> text"
+
+    def test_italic_single_asterisk(self):
+        """Convert *italic* → <i>italic</i>."""
+        result = markdown_to_html("This is *italic* text")
+        assert result == "This is <i>italic</i> text"
+
+    def test_italic_single_underscore(self):
+        """Convert _italic_ → <i>italic</i>."""
+        result = markdown_to_html("This is _italic_ text")
+        assert result == "This is <i>italic</i> text"
+
+    def test_inline_code_single_backtick(self):
+        """Convert `code` → <code>code</code>."""
+        result = markdown_to_html("Use the `command` here")
+        assert result == "Use the <code>command</code> here"
+
+    def test_code_block_triple_backtick(self):
+        """Convert ```code block``` → <pre>code block</pre>."""
+        result = markdown_to_html("```\ncode block\n```")
+        assert result == "<pre>\ncode block\n</pre>"
+
+    def test_code_block_multiline(self):
+        """Code blocks should handle multiple lines correctly."""
+        code = """```
+line 1
+line 2
+```"""
+        result = markdown_to_html(code)
+        assert "<pre>" in result
+        assert "line 1" in result
+        assert "line 2" in result
+
+    def test_heading_single_hash(self):
+        """Convert # Heading → <b>Heading</b>."""
+        result = markdown_to_html("# Main Title")
+        assert result == "<b>Main Title</b>"
+
+    def test_heading_double_hash(self):
+        """Convert ## Heading → <b>Heading</b>."""
+        result = markdown_to_html("## Sub Title")
+        assert result == "<b>Sub Title</b>"
+
+    def test_heading_triple_hash(self):
+        """Convert ### Heading → <b>Heading</b>."""
+        result = markdown_to_html("### Sub-sub Title")
+        assert result == "<b>Sub-sub Title</b>"
+
+    def test_mixed_markdown_and_html(self):
+        """Mixed Markdown and HTML should convert only Markdown parts."""
+        result = markdown_to_html("Use <b>HTML</b> or **Markdown** for bold")
+        assert "<b>HTML</b>" in result
+        assert "<b>Markdown</b>" in result
+
+    def test_already_html_tags_pass_through(self):
+        """HTML tags should not be modified."""
+        result = markdown_to_html("This is <b>already bold</b>")
+        assert result == "This is <b>already bold</b>"
+
+    def test_empty_string(self):
+        """Empty string should remain empty."""
+        result = markdown_to_html("")
+        assert result == ""
+
+    def test_no_markdown(self):
+        """Text with no Markdown should pass through unchanged."""
+        result = markdown_to_html("Just plain text here")
+        assert result == "Just plain text here"
+
+    def test_nested_patterns(self):
+        """Nested patterns should be handled correctly."""
+        result = markdown_to_html("This **contains *mixed* formatting**")
+        assert "<b>" in result
+        assert "<i>" in result
+
+    def test_multiple_bold_sections(self):
+        """Multiple bold sections should all be converted."""
+        result = markdown_to_html("**first** and **second** and **third**")
+        assert result == "<b>first</b> and <b>second</b> and <b>third</b>"
+
+    def test_bold_before_italic(self):
+        """Bold should be converted before italic to avoid partial matches."""
+        result = markdown_to_html("**bold** and *italic*")
+        assert result == "<b>bold</b> and <i>italic</i>"
+        assert "**" not in result
+
+    def test_code_before_bold(self):
+        """Code should be converted before bold to avoid partial matches."""
+        result = markdown_to_html("`**not bold**`")
+        assert "<code>**not bold**</code>" in result
+        assert "<b>" not in result
+
+    def test_llm_response_typical(self):
+        """Test a typical LLM response with mixed Markdown."""
+        llm_response = """**Language Spotter**: You said "I do 5x5", but say *completed* or *did* instead.
+
+**Coach's Tip**: Here's your `next exercise`:
+- **Back Squat**: Keep your chest up
+- *Weight*: focus on depth
+"""
+        result = markdown_to_html(llm_response)
+        assert "<b>Language Spotter</b>" in result
+        assert "<i>completed</i>" in result
+        assert "<code>next exercise</code>" in result
+        assert "<b>Back Squat</b>" in result
+        assert "<i>Weight</i>" in result
+        assert "**" not in result
+        assert "*" not in result or "<i>" in result  # single asterisks converted to italic
+
+    def test_preserve_html_entities(self):
+        """HTML entities like &amp; should work correctly."""
+        result = markdown_to_html("Use **bold** & `code`")
+        assert "<b>bold</b>" in result
+        assert "<code>code</code>" in result
+
+
+class TestMarkdownTableConverter:
+    """Test the Markdown table-to-<pre> converter for LLM-generated tables."""
+
+    def test_simple_table_wrapped_in_pre(self):
+        """Single Markdown table should be wrapped in <pre>.</pre>"""
+        table = """| # | Exercise |
+|---|----------|
+| 1 | Back Squat |"""
+        result = markdown_to_html(table)
+        assert "<pre>" in result
+        assert "</pre>" in result
+        # Separator row should be removed
+        assert "|---|" not in result
+        # Data rows should remain
+        assert "| # | Exercise |" in result
+        assert "| 1 | Back Squat |" in result
+
+    def test_multi_row_table(self):
+        """Multi-row table should strip separators and wrap in <pre>."""
+        table = """| # | Status | Exercise |
+|---|--------|----------|
+| 1 | ✅ DONE | Back Squat |
+| 2 | ⏳ PENDING | Leg Press |"""
+        result = markdown_to_html(table)
+        assert "<pre>" in result
+        assert "| # | Status | Exercise |" in result
+        assert "| 1 | ✅ DONE | Back Squat |" in result
+        assert "| 2 | ⏳ PENDING | Leg Press |" in result
+        # Separators removed
+        assert "|---|" not in result
+        assert "|--------|" not in result
+
+    def test_table_followed_by_text(self):
+        """Table block followed by normal text should only wrap the table."""
+        text = """| # | Exercise |
+|---|----------|
+| 1 | Squat |
+
+Now let's continue."""
+        result = markdown_to_html(text)
+        assert "<pre>" in result
+        assert "| # | Exercise |" in result
+        assert "Now let's continue." in result
+        # The non-table text should not be in <pre>
+        assert "<pre>Now" not in result
+
+    def test_text_followed_by_table(self):
+        """Normal text followed by table should only wrap the table."""
+        text = """Status update:
+
+| # | Exercise |
+|---|----------|
+| 1 | Squat |"""
+        result = markdown_to_html(text)
+        assert "Status update:" in result
+        assert "<pre>" in result
+        assert "| # | Exercise |" in result
+
+    def test_multiple_tables(self):
+        """Multiple separate tables should each be wrapped."""
+        text = """| # | A |
+|---|---|
+| 1 | X |
+
+Some text in between.
+
+| # | B |
+|---|---|
+| 2 | Y |"""
+        result = markdown_to_html(text)
+        # Count <pre> tags
+        pre_count = result.count("<pre>")
+        assert pre_count == 2
+        # Both tables present
+        assert "| # | A |" in result
+        assert "| # | B |" in result
+
+    def test_no_table_unchanged(self):
+        """Text with no tables should pass through unchanged."""
+        text = "No pipes here, just regular text."
+        result = markdown_to_html(text)
+        assert result == text
+        assert "<pre>" not in result
+
+    def test_already_html_pre_unchanged(self):
+        """<pre> blocks already in HTML should not be modified."""
+        text = "<pre>Already pre-formatted code</pre>"
+        result = markdown_to_html(text)
+        assert "<pre>Already pre-formatted code</pre>" in result
+
+    def test_session_status_format(self):
+        """Test typical Session Status table from LLM response."""
+        session_status = """| # | Status | Exercise       | Weight  | Sets×Reps |
+|----|--------|----------------|---------|-----------|
+| 1  | ✅ DONE | Back Squat     | 110kg   | 5×5       |
+| 2  | ⏳ PENDING | Leg Press 45° | 90kg/side | 3×8   |"""
+        result = markdown_to_html(session_status)
+        assert "<pre>" in result
+        assert "✅ DONE" in result
+        assert "⏳ PENDING" in result
+        # Separators removed
+        assert "|----|" not in result
+        assert "|--------|" not in result
+
+    def test_table_with_complex_content(self):
+        """Table with formatting and special chars should be wrapped correctly."""
+        table = """| Exercise | Notes |
+|----------|-------|
+| **Squat** | `45kg/side` |"""
+        result = markdown_to_html(table)
+        assert "<pre>" in result
+        # The table itself is wrapped, but **bold** inside table converts too
+        assert "<b>Squat</b>" in result
+        assert "<code>45kg/side</code>" in result
+
+    def test_table_with_line_breaks(self):
+        """Table preserves line breaks within the table block."""
+        table = """| # | Exercise |
+|---|----------|
+| 1 | Squat |
+| 2 | Bench |"""
+        result = markdown_to_html(table)
+        assert "<pre>" in result
+        # Both rows present with structure intact
+        assert "| 1 | Squat |" in result
+        assert "| 2 | Bench |" in result
