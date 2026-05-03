@@ -12,6 +12,7 @@ import pytest
 from telegram.constants import ParseMode
 
 from src.coach.day_plan import render_day_plan_summary, render_day_plan_formatted_list
+from src.coach.telegram.formatting import markdown_to_html
 
 
 def load_program():
@@ -348,3 +349,130 @@ class TestMessageParseMode:
             call_args = update.message.reply_text.call_args
             assert call_args.kwargs.get("parse_mode") == ParseMode.HTML or \
                    call_args.kwargs.get("parse_mode") == "HTML"
+
+
+class TestMarkdownToHtml:
+    """Test the markdown_to_html converter for safety-net LLM response handling."""
+
+    def test_bold_double_asterisk(self):
+        """Convert **bold** → <b>bold</b>."""
+        result = markdown_to_html("This is **bold** text")
+        assert result == "This is <b>bold</b> text"
+
+    def test_bold_double_underscore(self):
+        """Convert __bold__ → <b>bold</b>."""
+        result = markdown_to_html("This is __bold__ text")
+        assert result == "This is <b>bold</b> text"
+
+    def test_italic_single_asterisk(self):
+        """Convert *italic* → <i>italic</i>."""
+        result = markdown_to_html("This is *italic* text")
+        assert result == "This is <i>italic</i> text"
+
+    def test_italic_single_underscore(self):
+        """Convert _italic_ → <i>italic</i>."""
+        result = markdown_to_html("This is _italic_ text")
+        assert result == "This is <i>italic</i> text"
+
+    def test_inline_code_single_backtick(self):
+        """Convert `code` → <code>code</code>."""
+        result = markdown_to_html("Use the `command` here")
+        assert result == "Use the <code>command</code> here"
+
+    def test_code_block_triple_backtick(self):
+        """Convert ```code block``` → <pre>code block</pre>."""
+        result = markdown_to_html("```\ncode block\n```")
+        assert result == "<pre>\ncode block\n</pre>"
+
+    def test_code_block_multiline(self):
+        """Code blocks should handle multiple lines correctly."""
+        code = """```
+line 1
+line 2
+```"""
+        result = markdown_to_html(code)
+        assert "<pre>" in result
+        assert "line 1" in result
+        assert "line 2" in result
+
+    def test_heading_single_hash(self):
+        """Convert # Heading → <b>Heading</b>."""
+        result = markdown_to_html("# Main Title")
+        assert result == "<b>Main Title</b>"
+
+    def test_heading_double_hash(self):
+        """Convert ## Heading → <b>Heading</b>."""
+        result = markdown_to_html("## Sub Title")
+        assert result == "<b>Sub Title</b>"
+
+    def test_heading_triple_hash(self):
+        """Convert ### Heading → <b>Heading</b>."""
+        result = markdown_to_html("### Sub-sub Title")
+        assert result == "<b>Sub-sub Title</b>"
+
+    def test_mixed_markdown_and_html(self):
+        """Mixed Markdown and HTML should convert only Markdown parts."""
+        result = markdown_to_html("Use <b>HTML</b> or **Markdown** for bold")
+        assert "<b>HTML</b>" in result
+        assert "<b>Markdown</b>" in result
+
+    def test_already_html_tags_pass_through(self):
+        """HTML tags should not be modified."""
+        result = markdown_to_html("This is <b>already bold</b>")
+        assert result == "This is <b>already bold</b>"
+
+    def test_empty_string(self):
+        """Empty string should remain empty."""
+        result = markdown_to_html("")
+        assert result == ""
+
+    def test_no_markdown(self):
+        """Text with no Markdown should pass through unchanged."""
+        result = markdown_to_html("Just plain text here")
+        assert result == "Just plain text here"
+
+    def test_nested_patterns(self):
+        """Nested patterns should be handled correctly."""
+        result = markdown_to_html("This **contains *mixed* formatting**")
+        assert "<b>" in result
+        assert "<i>" in result
+
+    def test_multiple_bold_sections(self):
+        """Multiple bold sections should all be converted."""
+        result = markdown_to_html("**first** and **second** and **third**")
+        assert result == "<b>first</b> and <b>second</b> and <b>third</b>"
+
+    def test_bold_before_italic(self):
+        """Bold should be converted before italic to avoid partial matches."""
+        result = markdown_to_html("**bold** and *italic*")
+        assert result == "<b>bold</b> and <i>italic</i>"
+        assert "**" not in result
+
+    def test_code_before_bold(self):
+        """Code should be converted before bold to avoid partial matches."""
+        result = markdown_to_html("`**not bold**`")
+        assert "<code>**not bold**</code>" in result
+        assert "<b>" not in result
+
+    def test_llm_response_typical(self):
+        """Test a typical LLM response with mixed Markdown."""
+        llm_response = """**Language Spotter**: You said "I do 5x5", but say *completed* or *did* instead.
+
+**Coach's Tip**: Here's your `next exercise`:
+- **Back Squat**: Keep your chest up
+- *Weight*: focus on depth
+"""
+        result = markdown_to_html(llm_response)
+        assert "<b>Language Spotter</b>" in result
+        assert "<i>completed</i>" in result
+        assert "<code>next exercise</code>" in result
+        assert "<b>Back Squat</b>" in result
+        assert "<i>Weight</i>" in result
+        assert "**" not in result
+        assert "*" not in result or "<i>" in result  # single asterisks converted to italic
+
+    def test_preserve_html_entities(self):
+        """HTML entities like &amp; should work correctly."""
+        result = markdown_to_html("Use **bold** & `code`")
+        assert "<b>bold</b>" in result
+        assert "<code>code</code>" in result
