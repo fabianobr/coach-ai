@@ -93,6 +93,17 @@ After the table, add a summary line showing:
 
 Calculate sum of all tonnage (excluding isometric TuT) to get the day's total planned volume.
 
+### Invalid or Rest-Day Inputs
+
+If the user sends `/day D3`, `/day D6`, `/day D7`, or any other unrecognized day:
+- Respond: **"D3, D6, and D7 are rest days — no plan available. Valid training days are D1, D2, D4, and D5."**
+- Then continue with Steps 3–5 of the Interaction Loop (skipping the Day Plan and Step 2):
+  - 3. **Next Exercise** — (not applicable for rest days; explain briefly)
+  - 4. **Technical Cues** — (not applicable for rest days)
+  - 5. **Ready?** — Offer rest/recovery suggestions instead
+
+If the user sends any malformed input (e.g., `/day foo`, `/day`), respond: **"Unknown day. Valid options: D1, D2, D4, D5."** Then continue with the standard Interaction Loop normally.
+
 ### Then Continue the Loop
 
 After the Day Plan table and summary, execute Steps 3–5 of the Interaction Loop normally:

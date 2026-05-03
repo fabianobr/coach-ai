@@ -103,7 +103,7 @@ sequenceDiagram
     participant LLMProvider as LLM Provider<br/>(Claude)
     participant Logger as Session Logger
     
-    User->>Telegram: /done<br/>squat 5x5 @ 100kg
+    User->>Telegram: squat 5x5 @ 100kg
     activate Telegram
     
     Telegram->>SessionStore: Get user session<br/>(prior workouts, day)
@@ -145,7 +145,7 @@ sequenceDiagram
 ### Data Flow Details
 
 **Input:**
-- User message: `"squat 5x5 @ 100kg"` (via `/done` command or natural text)
+- User message: `"squat 5x5 @ 100kg"` (plain text submission)
 
 **Processing:**
 1. **Language Spotter** — LLM corrects any grammar/vocabulary issues
