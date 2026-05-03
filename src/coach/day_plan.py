@@ -106,86 +106,6 @@ def format_tonnage(exercise: dict[str, Any]) -> str:
     return f"{int(tonnage):,}kg"
 
 
-def render_day_plan_table(program: dict, day_id: str) -> tuple[str, float]:
-    """
-    Render a Day Plan table for the given day using simple pipe-separated format.
-    Returns (table_text, total_volume_kg).
-
-    Uses monospace-friendly formatting: left-aligned, pipe-separated, no fancy Unicode.
-    """
-    if day_id not in program.get("days", {}):
-        return "", 0.0
-
-    day_data = program["days"][day_id]
-    exercises = day_data.get("exercises", [])
-
-    # Column widths optimized for mobile Telegram (fits ~65 chars with pipes/spaces)
-    col_widths = {
-        "#": 1,
-        "Exercise": 13,
-        "Weight": 11,
-        "Sets×Reps": 8,
-        "Tonnage": 8,
-        "Notes": 2,
-    }
-
-    def left_pad(text: str, width: int) -> str:
-        """Left-align text in cell with fixed width."""
-        text = str(text)[:width]
-        return text.ljust(width)
-
-    lines = []
-
-    # Header separator line
-    header_sep = "─" * (sum(col_widths.values()) + len(col_widths) * 3 + 1)
-    lines.append(header_sep)
-
-    # Header row
-    headers = ["#", "Exercise", "Weight", "Sets×Reps", "Tonnage", "Notes"]
-    header_cells = [left_pad(h, col_widths[h]) for h in headers]
-    header_row = "| " + " | ".join(header_cells) + " |"
-    lines.append(header_row)
-
-    # Header separator line
-    lines.append(header_sep)
-
-    total_volume = 0.0
-
-    # Data rows
-    for ex in exercises:
-        order = str(ex.get("order", "?"))
-        name = ex.get("name", "Unknown")
-        weight = format_weight(ex)
-        sets_reps = format_sets_reps(ex)
-        tonnage_str = format_tonnage(ex)
-
-        # Calculate total volume (only non-isometric)
-        tonnage_val = calculate_tonnage(ex)
-        if isinstance(tonnage_val, (int, float)):
-            total_volume += tonnage_val
-
-        # Notes: superset indicator
-        notes = "SS" if ex.get("superset_with") else ""
-
-        # Build cells with proper width
-        cells = [
-            left_pad(order, col_widths["#"]),
-            left_pad(name, col_widths["Exercise"]),
-            left_pad(weight, col_widths["Weight"]),
-            left_pad(sets_reps, col_widths["Sets×Reps"]),
-            left_pad(tonnage_str, col_widths["Tonnage"]),
-            left_pad(notes, col_widths["Notes"]),
-        ]
-        row = "| " + " | ".join(cells) + " |"
-        lines.append(row)
-
-    # Bottom separator line
-    lines.append(header_sep)
-
-    table = "\n".join(lines)
-    return table, total_volume
-
-
 def render_day_plan_formatted_list(program: dict, day_id: str) -> tuple[str, float]:
     """
     Render a Day Plan as a formatted list with HTML styling (Telegram HTML mode).
@@ -225,8 +145,8 @@ def render_day_plan_formatted_list(program: dict, day_id: str) -> tuple[str, flo
         lines.append(f"   <i>Weight:</i> {weight} | <i>Sets×Reps:</i> {sets_reps} | <i>Tonnage:</i> {tonnage_str}")
         lines.append("")  # Blank line between exercises
 
-    # Remove last blank line
-    if lines and lines[-1] == "":
+    # Remove trailing blank lines
+    while lines and lines[-1] == "":
         lines.pop()
 
     return "\n".join(lines), total_volume

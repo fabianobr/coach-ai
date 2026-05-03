@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from telegram.constants import ParseMode
 
-from src.coach.day_plan import render_day_plan_summary, render_day_plan_table, render_day_plan_formatted_list
+from src.coach.day_plan import render_day_plan_summary, render_day_plan_formatted_list
 
 
 def load_program():
@@ -48,91 +48,6 @@ class TestDayPlanSummaryFormatting:
         result = render_day_plan_summary("D1", 12345.67, 6)
         assert "12,345 kg" in result
         assert "<b>Exercises:</b> 6" in result
-
-
-class TestDayPlanTableFormatting:
-    """Test that day plan tables render correctly."""
-
-    def test_table_has_header_separator(self):
-        """Table should have separator lines using ─ character."""
-        program = load_program()
-        table, _ = render_day_plan_table(program, "D1")
-
-        lines = table.split("\n")
-        # First and last lines should be separator lines (all dashes)
-        assert lines[0].startswith("─")
-        assert lines[-1].startswith("─")
-
-    def test_table_has_header_row(self):
-        """Table should have a proper header row (mobile-optimized)."""
-        program = load_program()
-        table, _ = render_day_plan_table(program, "D1")
-
-        lines = table.split("\n")
-        header_row = lines[1]  # After first separator
-
-        # Header should contain column names (may be truncated for mobile)
-        assert "Exercise" in header_row
-        assert "Weight" in header_row
-        assert "Sets×" in header_row  # "Sets×Reps" may be truncated to "Sets×Rep"
-        assert "Tonnage" in header_row
-
-    def test_table_columns_aligned(self):
-        """Table columns should be properly aligned."""
-        program = load_program()
-        table, _ = render_day_plan_table(program, "D1")
-
-        lines = table.split("\n")
-        # All non-separator data rows should have the same starting position
-        # for each column separator (pipe character)
-
-        data_rows = [l for l in lines[3:-1] if l.strip() and not l.startswith("─")]
-        if data_rows:
-            # Check that all rows have pipes at the same positions
-            first_row_pipes = [i for i, c in enumerate(data_rows[0]) if c == "|"]
-            for row in data_rows[1:]:
-                row_pipes = [i for i, c in enumerate(row) if c == "|"]
-                assert row_pipes == first_row_pipes, f"Pipe positions mismatch:\n{data_rows[0]}\nvs\n{row}"
-
-    def test_table_contains_all_exercises(self):
-        """Table should include all exercises for the day (may be truncated for mobile)."""
-        program = load_program()
-        table, _ = render_day_plan_table(program, "D1")
-
-        # D1 exercises from program.json (checking for untruncated parts)
-        assert "Back Squat" in table
-        assert "Leg Press" in table
-        assert "RDL" in table
-        assert "Hip Abduction" in table
-        assert "Weighted" in table  # "Weighted Plank" may be truncated
-
-    def test_table_shows_correct_weights(self):
-        """Table should display weights correctly based on type."""
-        program = load_program()
-        table, _ = render_day_plan_table(program, "D1")
-
-        # Back Squat is barbell with total_weight_kg
-        assert "110kg" in table  # Back Squat total weight
-
-        # Leg Press is per-side
-        assert "90.0kg/side" in table
-
-        # Weighted Plank is isometric (shows —)
-        assert "—" in table
-
-    def test_table_shows_tonnage(self):
-        """Table should calculate and display tonnage for each exercise."""
-        program = load_program()
-        table, total = render_day_plan_table(program, "D1")
-
-        # Back Squat: 110kg × 5 × 5 = 2,750kg
-        assert "2,750kg" in table
-
-        # Weighted Plank shows TuT instead of tonnage (may be truncated to "TuT: 105")
-        assert "TuT:" in table and "105" in table
-
-        # Total volume should match
-        assert total == pytest.approx(9387.5, abs=0.1)
 
 
 class TestDayPlanFormattedListFormatting:
