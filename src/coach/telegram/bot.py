@@ -11,6 +11,7 @@ from telegram.error import BadRequest
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 from coach.constants import DAY_LABELS
+from coach.day_plan import render_day_plan_table, render_day_plan_summary
 from coach.llm import Message, get_provider
 from coach.logger import SessionLogger
 from coach.paths import get_resource_path
@@ -90,7 +91,24 @@ class CoachBot:
 
         session.current_day = day_id
         day_label = DAY_LABELS.get(day_id, "Unknown")
-        await update.message.reply_text(f"✅ Training day set to {day_id} ({day_label})")
+
+        # Render Day Plan table with weights and tonnage
+        reply_lines = [f"✅ Training day set to {day_id} ({day_label})"]
+
+        if self.program and day_id in self.program.get("days", {}):
+            day_data = self.program["days"][day_id]
+            exercises = day_data.get("exercises", [])
+            exercise_count = len(exercises)
+
+            # Render table
+            table, total_volume = render_day_plan_table(self.program, day_id)
+            if table:
+                reply_lines.append("")
+                reply_lines.append(f"```\n{table}\n```")
+                reply_lines.append("")
+                reply_lines.append(render_day_plan_summary(day_id, total_volume, exercise_count))
+
+        await self._safe_reply(update.message, "\n".join(reply_lines))
 
     async def handle_done(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user_id = update.effective_user.id
@@ -132,14 +150,20 @@ class CoachBot:
 
         day_data = self.program["days"][session.current_day]
         day_label = day_data.get("label", "Unknown")
+        exercises = day_data.get("exercises", [])
+        exercise_count = len(exercises)
 
-        lines = [f"📋 *{session.current_day}: {day_label}* Exercises"]
-        for ex in day_data.get("exercises", []):
-            order = ex.get("order", "?")
-            name = ex.get("name", "Unknown")
-            lines.append(f"{order}. {name} ⏳")
+        # Use Day Plan table format
+        reply_lines = [f"📋 *{session.current_day}: {day_label}* Exercises"]
 
-        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+        table, total_volume = render_day_plan_table(self.program, session.current_day)
+        if table:
+            reply_lines.append("")
+            reply_lines.append(f"```\n{table}\n```")
+            reply_lines.append("")
+            reply_lines.append(render_day_plan_summary(session.current_day, total_volume, exercise_count))
+
+        await self._safe_reply(update.message, "\n".join(reply_lines))
 
     async def _safe_reply(self, message, text: str) -> None:
         """
