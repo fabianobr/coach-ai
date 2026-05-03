@@ -104,7 +104,7 @@ class CoachBot:
             table, total_volume = render_day_plan_table(self.program, day_id)
             if table:
                 reply_lines.append("")
-                reply_lines.append(table)
+                reply_lines.append(f"```\n{table}\n```")
                 reply_lines.append("")
                 reply_lines.append(render_day_plan_summary(day_id, total_volume, exercise_count))
 
@@ -159,7 +159,7 @@ class CoachBot:
         table, total_volume = render_day_plan_table(self.program, session.current_day)
         if table:
             reply_lines.append("")
-            reply_lines.append(table)
+            reply_lines.append(f"```\n{table}\n```")
             reply_lines.append("")
             reply_lines.append(render_day_plan_summary(session.current_day, total_volume, exercise_count))
 

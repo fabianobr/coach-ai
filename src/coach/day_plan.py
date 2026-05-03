@@ -108,11 +108,10 @@ def format_tonnage(exercise: dict[str, Any]) -> str:
 
 def render_day_plan_table(program: dict, day_id: str) -> tuple[str, float]:
     """
-    Render a Day Plan table for the given day.
-    Returns (table_markdown, total_volume_kg).
+    Render a Day Plan table for the given day using simple pipe-separated format.
+    Returns (table_text, total_volume_kg).
 
-    Table format:
-    | # | Exercise | Weight | Sets×Reps | Tonnage | Notes |
+    Uses monospace-friendly formatting: left-aligned, pipe-separated, no fancy Unicode.
     """
     if day_id not in program.get("days", {}):
         return "", 0.0
@@ -120,16 +119,41 @@ def render_day_plan_table(program: dict, day_id: str) -> tuple[str, float]:
     day_data = program["days"][day_id]
     exercises = day_data.get("exercises", [])
 
-    # Build table header
-    lines = [
-        "| # | Exercise | Weight (kg) | Sets × Reps | Tonnage (kg) | Notes |",
-        "| :---: | :--- | :---: | :---: | :---: | :--- |",
-    ]
+    # Column widths derived from max data lengths across all exercises
+    col_widths = {
+        "#": 2,
+        "Exercise": 23,
+        "Weight": 16,
+        "Sets×Reps": 9,
+        "Tonnage": 10,
+        "Notes": 5,
+    }
+
+    def left_pad(text: str, width: int) -> str:
+        """Left-align text in cell with fixed width."""
+        text = str(text)[:width]
+        return text.ljust(width)
+
+    lines = []
+
+    # Header separator line
+    header_sep = "─" * (sum(col_widths.values()) + len(col_widths) * 3 + 1)
+    lines.append(header_sep)
+
+    # Header row
+    headers = ["#", "Exercise", "Weight", "Sets×Reps", "Tonnage", "Notes"]
+    header_cells = [left_pad(h, col_widths[h]) for h in headers]
+    header_row = "| " + " | ".join(header_cells) + " |"
+    lines.append(header_row)
+
+    # Header separator line
+    lines.append(header_sep)
 
     total_volume = 0.0
 
+    # Data rows
     for ex in exercises:
-        order = ex.get("order", "?")
+        order = str(ex.get("order", "?"))
         name = ex.get("name", "Unknown")
         weight = format_weight(ex)
         sets_reps = format_sets_reps(ex)
@@ -141,11 +165,22 @@ def render_day_plan_table(program: dict, day_id: str) -> tuple[str, float]:
             total_volume += tonnage_val
 
         # Notes: superset indicator
-        notes = ""
-        if ex.get("superset_with"):
-            notes = "*(SS)*"
+        notes = "SS" if ex.get("superset_with") else ""
 
-        lines.append(f"| {order} | {name} | {weight} | {sets_reps} | {tonnage_str} | {notes} |")
+        # Build cells with proper width
+        cells = [
+            left_pad(order, col_widths["#"]),
+            left_pad(name, col_widths["Exercise"]),
+            left_pad(weight, col_widths["Weight"]),
+            left_pad(sets_reps, col_widths["Sets×Reps"]),
+            left_pad(tonnage_str, col_widths["Tonnage"]),
+            left_pad(notes, col_widths["Notes"]),
+        ]
+        row = "| " + " | ".join(cells) + " |"
+        lines.append(row)
+
+    # Bottom separator line
+    lines.append(header_sep)
 
     table = "\n".join(lines)
     return table, total_volume
