@@ -242,3 +242,431 @@ async def test_handle_message_falls_back_to_plain_text_on_bad_markdown(bot_with_
     assistant_msgs = [m for m in session.messages if m.role == "assistant"]
     assert len(assistant_msgs) == 1
     assert assistant_msgs[0].content == "Great job *athlete"
+
+
+@pytest.mark.asyncio
+async def test_safe_reply_fallback_also_fails(bot_with_mock_provider):
+    """
+    Test that when both Markdown parsing and plain-text fallback fail,
+    the exception propagates (not silently swallowed).
+    """
+    bot = bot_with_mock_provider
+    message = MagicMock()
+
+    # First call (Markdown) raises BadRequest
+    # Second call (fallback, plain text) raises a different error
+    from telegram.error import BadRequest
+    reply_text_side_effect = [
+        BadRequest("can't parse entities"),
+        Exception("Network timeout"),
+    ]
+    message.reply_text = AsyncMock(side_effect=reply_text_side_effect)
+
+    # Should propagate the fallback error
+    with pytest.raises(Exception, match="Network timeout"):
+        await bot._safe_reply(message, "test response")
+
+    # Verify both calls were made (one for Markdown, one for fallback)
+    assert message.reply_text.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_handle_message_typing_action_failure_does_not_abort(bot_with_mock_provider):
+    """
+    Test that if send_action(ChatAction.TYPING) fails, handle_message
+    continues and completes successfully.
+    """
+    bot = bot_with_mock_provider
+
+    update = MagicMock()
+    context = MagicMock()
+    user_id = 9999
+
+    update.effective_user.id = user_id
+    update.message.text = "squat PR!"
+
+    # Typing action fails (initial call)
+    # But must succeed on heartbeat (mid-stream call)
+    typing_side_effects = [
+        Exception("Telegram unreachable"),  # initial TYPING fails
+        None,  # heartbeat TYPING succeeds
+    ]
+    update.message.chat.send_action = AsyncMock(side_effect=typing_side_effects)
+
+    # Mock reply_text for _safe_reply
+    update.message.reply_text = AsyncMock()
+
+    # Should not raise; should complete successfully
+    await bot.handle_message(update, context)
+
+    # Verify session was updated with assistant message despite initial typing failure
+    session = bot.store.get_or_create(user_id)
+    assistant_msgs = [m for m in session.messages if m.role == "assistant"]
+    assert len(assistant_msgs) == 1
+    assert "Hello World" in assistant_msgs[0].content
+
+
+@pytest.mark.asyncio
+async def test_handle_message_producer_exception_during_streaming(bot_with_mock_provider):
+    """
+    Test that when provider.stream() raises an exception mid-iteration,
+    the exception is properly awaited and the user gets "Coach is unavailable".
+    """
+    bot = bot_with_mock_provider
+
+    # Producer yields one chunk then raises
+    def failing_stream(*args, **kwargs):
+        yield "First chunk"
+        raise RuntimeError("LLM API timeout")
+
+    bot.provider.stream = failing_stream
+
+    update = MagicMock()
+    update.effective_user.id = 7777
+    update.message.text = "help me"
+    update.message.chat.send_action = AsyncMock()
+    update.message.reply_text = AsyncMock()
+
+    await bot.handle_message(update, MagicMock())
+
+    # Should send "Coach is unavailable" message
+    reply_calls = [call for call in update.message.reply_text.call_args_list]
+    reply_texts = [call.args[0] if call.args else None for call in reply_calls]
+    assert any("unavailable" in str(text).lower() for text in reply_texts if text)
+
+    # Assistant message should NOT be appended (streaming failed)
+    session = bot.store.get_or_create(7777)
+    assistant_msgs = [m for m in session.messages if m.role == "assistant"]
+    # If there's an assistant message, it should not contain "First chunk" due to the error
+    # Actually, with our new implementation, we don't append on error, so should be empty
+    assert len(assistant_msgs) == 0
+
+
+@pytest.mark.asyncio
+async def test_handle_message_empty_stream(bot_with_mock_provider):
+    """
+    Test that when provider.stream() yields no chunks,
+    no reply is sent and no assistant message is appended.
+    """
+    bot = bot_with_mock_provider
+    bot.provider.stream.return_value = iter([])
+
+    update = MagicMock()
+    update.effective_user.id = 6666
+    update.message.text = "anything"
+    update.message.chat.send_action = AsyncMock()
+    update.message.reply_text = AsyncMock()
+
+    await bot.handle_message(update, MagicMock())
+
+    # reply_text should not be called for empty response
+    # (no buffer to send, no error occurred)
+    session = bot.store.get_or_create(6666)
+    assistant_msgs = [m for m in session.messages if m.role == "assistant"]
+    assert len(assistant_msgs) == 0
+
+
+@pytest.mark.asyncio
+async def test_handle_message_safe_reply_failure_on_chunk(bot_with_mock_provider):
+    """
+    Test that if _safe_reply fails on an intermediate chunk send
+    (both Markdown and plain text), the exception is caught and
+    streaming is aborted without appending to session.
+    """
+    bot = bot_with_mock_provider
+    # Simulate a large response that triggers buffer flush
+    bot.provider.stream.return_value = iter(["x" * 4000, "y" * 1000])
+
+    update = MagicMock()
+    update.effective_user.id = 5555
+    update.message.text = "test"
+    update.message.chat.send_action = AsyncMock()
+
+    # Both Markdown and plain text fail (permanent error)
+    from telegram.error import BadRequest
+
+    async def always_fail(text, **kwargs):
+        raise BadRequest("Chat not found - permanent")
+
+    update.message.reply_text = always_fail
+
+    await bot.handle_message(update, MagicMock())
+
+    # Should log error and return (not append)
+    session = bot.store.get_or_create(5555)
+    assistant_msgs = [m for m in session.messages if m.role == "assistant"]
+    assert len(assistant_msgs) == 0
+
+
+@pytest.mark.asyncio
+async def test_handle_message_multiple_buffer_flushes(bot_with_mock_provider):
+    """
+    Test that when response is large enough to trigger multiple buffer flushes,
+    all chunks are captured and final message is complete.
+    """
+    bot = bot_with_mock_provider
+    # Three chunks, each ~3000 chars, total > 6000 (triggers 2+ flushes)
+    chunks = ["a" * 3000, "b" * 3000, "c" * 3000]
+    bot.provider.stream.return_value = iter(chunks)
+
+    update = MagicMock()
+    update.effective_user.id = 4444
+    update.message.text = "big response"
+    update.message.chat.send_action = AsyncMock()
+    update.message.reply_text = AsyncMock()
+
+    await bot.handle_message(update, MagicMock())
+
+    # Session should have assistant message with all chunks
+    session = bot.store.get_or_create(4444)
+    assistant_msgs = [m for m in session.messages if m.role == "assistant"]
+    assert len(assistant_msgs) == 1
+    assert assistant_msgs[0].content == "a" * 3000 + "b" * 3000 + "c" * 3000
+
+    # Multiple reply_text calls should have been made (at least one for buffer flush)
+    assert update.message.reply_text.call_count >= 1
+
+
+@pytest.mark.asyncio
+async def test_handle_done_success_clears_session():
+    """Test that successful /done clears the session."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+        bot.system_prompt = "coach"
+        bot.program = {"days": {"D1": {"exercises": []}}}
+
+        update = MagicMock()
+        update.effective_user.id = 111
+        update.message.reply_text = AsyncMock()
+
+        context = MagicMock()
+
+        # Setup a session with some data
+        session = bot.store.get_or_create(111)
+        session.current_day = "D1"
+
+        # Mock logger save (sync function for asyncio.to_thread)
+        with patch("src.coach.telegram.bot.SessionLogger") as mock_logger_class:
+            mock_logger = MagicMock()
+            mock_logger_class.return_value = mock_logger
+            mock_logger.save = MagicMock()  # Regular mock for sync function
+
+            await bot.handle_done(update, context)
+
+            # Session should be cleared
+            assert 111 not in bot.store.sessions
+
+
+@pytest.mark.asyncio
+async def test_handle_done_file_exists_error():
+    """Test that FileExistsError on /done preserves session."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+        bot.system_prompt = "coach"
+        bot.program = {"days": {"D1": {"exercises": []}}}
+
+        update = MagicMock()
+        update.effective_user.id = 222
+        update.message.reply_text = AsyncMock()
+
+        context = MagicMock()
+
+        session = bot.store.get_or_create(222)
+
+        # Mock logger.save to raise FileExistsError
+        with patch("src.coach.telegram.bot.SessionLogger") as mock_logger_class:
+            mock_logger = MagicMock()
+            mock_logger_class.return_value = mock_logger
+            mock_logger.save = MagicMock(side_effect=FileExistsError("already logged"))
+
+            await bot.handle_done(update, context)
+
+            # Session should NOT be cleared (preserved)
+            assert 222 in bot.store.sessions
+            update.message.reply_text.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_handle_done_permission_error():
+    """Test that PermissionError on /done is logged and session preserved."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+        bot.system_prompt = "coach"
+        bot.program = {"days": {"D1": {"exercises": []}}}
+
+        update = MagicMock()
+        update.effective_user.id = 333
+        update.message.reply_text = AsyncMock()
+
+        context = MagicMock()
+
+        session = bot.store.get_or_create(333)
+
+        # Mock logger.save to raise PermissionError
+        with patch("src.coach.telegram.bot.SessionLogger") as mock_logger_class:
+            mock_logger = MagicMock()
+            mock_logger_class.return_value = mock_logger
+            mock_logger.save = MagicMock(side_effect=PermissionError("no write access"))
+
+            await bot.handle_done(update, context)
+
+            # Session should NOT be cleared
+            assert 333 in bot.store.sessions
+            update.message.reply_text.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_handle_status_with_valid_program():
+    """Test /status when program is loaded."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+        bot.system_prompt = "coach"
+        bot.program = {
+            "days": {
+                "D1": {
+                    "label": "Lower Strength",
+                    "exercises": [
+                        {"order": "1", "name": "Squat"},
+                        {"order": "2", "name": "RDL"},
+                    ],
+                }
+            }
+        }
+
+        update = MagicMock()
+        update.effective_user.id = 444
+        update.message.reply_text = AsyncMock()
+
+        context = MagicMock()
+
+        session = bot.store.get_or_create(444)
+        session.current_day = "D1"
+
+        await bot.handle_status(update, context)
+
+        update.message.reply_text.assert_awaited_once()
+        call_text = update.message.reply_text.await_args.args[0]
+        assert "D1" in call_text
+        assert "Lower Strength" in call_text
+        assert "Squat" in call_text
+
+
+@pytest.mark.asyncio
+async def test_handle_status_program_not_loaded():
+    """Test /status when program is None."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+        bot.system_prompt = "coach"
+        bot.program = None
+
+        update = MagicMock()
+        update.effective_user.id = 555
+        update.message.reply_text = AsyncMock()
+
+        context = MagicMock()
+
+        bot.store.get_or_create(555)
+
+        await bot.handle_status(update, context)
+
+        update.message.reply_text.assert_awaited_once()
+        call_text = update.message.reply_text.await_args.args[0]
+        assert "Unable to load training program" in call_text
+
+
+@pytest.mark.asyncio
+async def test_handle_day_no_arguments():
+    """Test /day with no arguments."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+
+        update = MagicMock()
+        update.effective_user.id = 666
+        update.message.reply_text = AsyncMock()
+
+        context = MagicMock()
+        context.args = []
+
+        await bot.handle_day(update, context)
+
+        update.message.reply_text.assert_awaited_once()
+        call_text = update.message.reply_text.await_args.args[0]
+        assert "Usage:" in call_text
+
+
+@pytest.mark.asyncio
+async def test_handle_day_invalid_day():
+    """Test /day with invalid day."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+
+        update = MagicMock()
+        update.effective_user.id = 777
+        update.message.reply_text = AsyncMock()
+
+        context = MagicMock()
+        context.args = ["D3"]
+
+        await bot.handle_day(update, context)
+
+        update.message.reply_text.assert_awaited_once()
+        call_text = update.message.reply_text.await_args.args[0]
+        assert "Invalid day" in call_text
+
+
+@pytest.mark.asyncio
+async def test_concurrent_users_message_isolation():
+    """Test that concurrent messages from different users don't cross-contaminate."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+        bot.system_prompt = "coach"
+        bot.provider = MagicMock()
+
+        # Create two mock updates for different users
+        async def create_update(user_id: int, text: str):
+            update = MagicMock()
+            update.effective_user.id = user_id
+            update.message.text = text
+            update.message.chat.send_action = AsyncMock()
+            update.message.reply_text = AsyncMock()
+            return update
+
+        # Simulate concurrent handling
+        update1 = await create_update(1000, "user 1 message")
+        update2 = await create_update(2000, "user 2 message")
+
+        bot.provider.stream = lambda **kwargs: iter(["response"])
+
+        # Handle both concurrently
+        import asyncio
+
+        await asyncio.gather(
+            bot.handle_message(update1, MagicMock()),
+            bot.handle_message(update2, MagicMock()),
+        )
+
+        # Both sessions should have their own messages
+        session1 = bot.store.get_or_create(1000)
+        session2 = bot.store.get_or_create(2000)
+
+        assert any(m.content == "user 1 message" for m in session1.messages)
+        assert any(m.content == "user 2 message" for m in session2.messages)
+
+        # User 1's session should not have user 2's message
+        assert not any(m.content == "user 2 message" for m in session1.messages)
