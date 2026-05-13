@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coach AI — D1 Workout Session</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #1a1a2e;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    padding: 40px 20px;
+    font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  }
+
+  /* ─── iPhone Frame ─── */
+  .iphone {
+    width: 393px;
+    background: #000;
+    border-radius: 54px;
+    padding: 12px;
+    box-shadow:
+      0 0 0 1px #333,
+      0 0 0 3px #1a1a1a,
+      0 30px 80px rgba(0,0,0,0.7),
+      inset 0 0 0 1px #3a3a3a;
+    position: relative;
+  }
+
+  /* Side buttons */
+  .iphone::before {
+    content: '';
+    position: absolute;
+    left: -3px;
+    top: 120px;
+    width: 3px;
+    height: 34px;
+    background: #2a2a2a;
+    border-radius: 2px 0 0 2px;
+    box-shadow: 0 44px 0 #2a2a2a, 0 88px 0 #2a2a2a;
+  }
+  .iphone::after {
+    content: '';
+    position: absolute;
+    right: -3px;
+    top: 164px;
+    width: 3px;
+    height: 68px;
+    background: #2a2a2a;
+    border-radius: 0 2px 2px 0;
+  }
+
+  .iphone-screen {
+    background: #efebe0;
+    border-radius: 44px;
+    overflow: hidden;
+    height: 852px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  /* ─── Status Bar ─── */
+  .status-bar {
+    background: #fff;
+    height: 54px;
+    display: flex;
+    align-items: flex-end;
+    padding: 0 28px 8px;
+    justify-content: space-between;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 10;
+  }
+
+  /* Dynamic Island */
+  .dynamic-island {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 34px;
+    background: #000;
+    border-radius: 20px;
+  }
+
+  .status-time {
+    font-size: 15px;
+    font-weight: 600;
+    color: #000;
+    letter-spacing: -0.3px;
+  }
+
+  .status-icons {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .status-icons svg {
+    fill: #000;
+  }
+
+  /* ─── Telegram Header ─── */
+  .tg-header {
+    background: #fff;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 10px;
+    border-bottom: 0.5px solid #e0e0e0;
+    flex-shrink: 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+
+  .back-btn {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    color: #2aabee;
+    font-size: 16px;
+    font-weight: 400;
+    min-width: 48px;
+  }
+
+  .back-btn svg { fill: #2aabee; }
+
+  .back-badge {
+    background: #2aabee;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .tg-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #2aabee 0%, #007aff 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  .tg-info { flex: 1; }
+  .tg-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: #000;
+    line-height: 1.2;
+  }
+  .tg-status {
+    font-size: 12px;
+    color: #8e8e93;
+    line-height: 1.2;
+  }
+
+  .tg-actions {
+    display: flex;
+    gap: 18px;
+  }
+  .tg-actions svg { fill: #2aabee; }
+
+  /* ─── Chat Area ─── */
+  .chat-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: #efebe0;
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c8bfaf' fill-opacity='0.15'%3E%3Ccircle cx='30' cy='30' r='1'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  }
+
+  .chat-area::-webkit-scrollbar { display: none; }
+
+  /* Date divider */
+  .date-divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 10px 0 8px;
+  }
+  .date-pill {
+    background: rgba(0,0,0,0.18);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 10px;
+  }
+
+  /* ─── Message Bubbles ─── */
+  .msg-row {
+    display: flex;
+    margin: 1px 0;
+  }
+
+  .msg-row.user { justify-content: flex-end; }
+  .msg-row.bot  { justify-content: flex-start; }
+
+  .bubble {
+    max-width: 82%;
+    padding: 7px 10px 6px;
+    border-radius: 18px;
+    position: relative;
+    font-size: 14px;
+    line-height: 1.45;
+    word-break: break-word;
+  }
+
+  /* User bubble */
+  .msg-row.user .bubble {
+    background: #effdde;
+    border-radius: 18px 18px 4px 18px;
+    color: #000;
+  }
+
+  /* Bot bubble */
+  .msg-row.bot .bubble {
+    background: #fff;
+    border-radius: 18px 18px 18px 4px;
+    color: #000;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+  }
+
+  /* Command bubble (user) */
+  .msg-row.user .bubble.cmd {
+    background: #d4f0ff;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 14px;
+    color: #0066cc;
+    font-weight: 600;
+  }
+
+  .bubble-time {
+    font-size: 11px;
+    color: #999;
+    float: right;
+    margin-left: 8px;
+    margin-top: 2px;
+    line-height: 1;
+  }
+
+  .msg-row.user .bubble-time {
+    color: #7ec877;
+  }
+
+  /* Read tick for user messages */
+  .tick {
+    display: inline-flex;
+    margin-left: 3px;
+    vertical-align: middle;
+  }
+
+  /* ─── Message Content Styles ─── */
+  .bubble b, .bubble strong {
+    font-weight: 700;
+  }
+  .bubble i, .bubble em {
+    font-style: italic;
+    color: #555;
+  }
+
+  .section-header {
+    font-size: 13px;
+    font-weight: 700;
+    color: #2aabee;
+    margin-bottom: 4px;
+    margin-top: 2px;
+  }
+  .section-header:first-child { margin-top: 0; }
+
+  .exercise-row {
+    padding: 5px 0 3px;
+    border-bottom: 0.5px solid #f0f0f0;
+  }
+  .exercise-row:last-child { border-bottom: none; }
+
+  .ex-name {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #1a1a1a;
+  }
+
+  .ex-status-done { color: #27ae60; }
+  .ex-status-pending { color: #bbb; }
+
+  .ex-detail {
+    font-size: 12px;
+    color: #666;
+    margin-top: 1px;
+  }
+  .ex-detail span { color: #333; font-weight: 500; }
+
+  .next-ex-box {
+    background: #f0faff;
+    border-left: 3px solid #2aabee;
+    padding: 6px 8px;
+    border-radius: 0 8px 8px 0;
+    margin-top: 4px;
+  }
+  .next-ex-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #2aabee;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .next-ex-target {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin-top: 1px;
+  }
+  .next-ex-sub {
+    font-size: 12px;
+    color: #555;
+    margin-top: 1px;
+  }
+
+  .cues-box {
+    background: #fffbf0;
+    border-left: 3px solid #f39c12;
+    padding: 6px 8px;
+    border-radius: 0 8px 8px 0;
+    margin-top: 4px;
+  }
+  .cues-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #e67e22;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 3px;
+  }
+  .cues-item {
+    font-size: 12.5px;
+    color: #444;
+    padding: 1px 0;
+    padding-left: 12px;
+    position: relative;
+  }
+  .cues-item::before {
+    content: '•';
+    position: absolute;
+    left: 2px;
+    color: #e67e22;
+  }
+
+  .ready-line {
+    font-size: 13px;
+    color: #555;
+    font-style: italic;
+    margin-top: 6px;
+    padding-top: 4px;
+    border-top: 0.5px solid #eee;
+  }
+
+  .lang-box {
+    background: #f9f9f9;
+    border-left: 3px solid #9b59b6;
+    padding: 5px 8px;
+    border-radius: 0 8px 8px 0;
+    margin-bottom: 6px;
+  }
+  .lang-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #8e44ad;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+  .lang-correction {
+    font-size: 12.5px;
+    color: #444;
+  }
+  .lang-correction s { color: #c0392b; }
+  .lang-correction mark {
+    background: none;
+    color: #27ae60;
+    font-weight: 600;
+  }
+  .lang-tip {
+    font-size: 11.5px;
+    color: #8e44ad;
+    margin-top: 2px;
+    font-style: italic;
+  }
+
+  .separator { height: 6px; }
+
+  /* Day Plan styles */
+  .plan-header {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 6px;
+  }
+  .plan-day-label {
+    display: inline-block;
+    background: #2aabee;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+  }
+  .plan-ex-row {
+    display: flex;
+    align-items: flex-start;
+    padding: 5px 0;
+    border-bottom: 0.5px solid #f0f0f0;
+    gap: 8px;
+  }
+  .plan-ex-row:last-child { border-bottom: none; }
+  .plan-ex-num {
+    font-size: 12px;
+    font-weight: 700;
+    color: #999;
+    min-width: 16px;
+    margin-top: 1px;
+  }
+  .plan-ex-body { flex: 1; }
+  .plan-ex-name {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #1a1a1a;
+    line-height: 1.3;
+  }
+  .plan-ex-info {
+    font-size: 12px;
+    color: #666;
+    margin-top: 1px;
+  }
+  .plan-ex-info .badge {
+    display: inline-block;
+    background: #e8f5e9;
+    color: #2e7d32;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 8px;
+    margin-top: 2px;
+  }
+  .plan-ex-info .badge.iso {
+    background: #fff3e0;
+    color: #e65100;
+  }
+  .plan-summary {
+    background: #f0faff;
+    border-radius: 8px;
+    padding: 7px 10px;
+    margin-top: 8px;
+    font-size: 12.5px;
+    color: #2aabee;
+    font-weight: 600;
+    text-align: center;
+  }
+
+  /* Done session summary */
+  .summary-box {
+    background: #f0fff4;
+    border: 1px solid #d4edda;
+    border-radius: 10px;
+    padding: 8px 10px;
+    margin-top: 4px;
+  }
+  .summary-total {
+    font-size: 16px;
+    font-weight: 800;
+    color: #27ae60;
+    text-align: center;
+    margin-bottom: 6px;
+  }
+  .summary-ex-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    padding: 2px 0;
+    border-bottom: 0.5px solid #e0ffe0;
+    color: #444;
+  }
+  .summary-ex-row:last-child { border-bottom: none; }
+  .summary-ex-row .done-tag { color: #27ae60; font-weight: 600; }
+
+  /* Complete message */
+  .complete-msg {
+    text-align: center;
+    padding: 4px 0 2px;
+  }
+  .complete-msg .emoji-big { font-size: 28px; display: block; margin-bottom: 4px; }
+  .complete-msg .title { font-size: 15px; font-weight: 700; color: #1a1a1a; }
+  .complete-msg .subtitle { font-size: 13px; color: #555; margin-top: 2px; }
+
+  /* ─── Input Bar ─── */
+  .input-bar {
+    background: #fff;
+    padding: 8px 12px 28px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-top: 0.5px solid #e0e0e0;
+    flex-shrink: 0;
+  }
+
+  .input-field {
+    flex: 1;
+    background: #f0f0f0;
+    border-radius: 20px;
+    padding: 9px 14px;
+    font-size: 15px;
+    color: #aaa;
+    font-family: inherit;
+  }
+
+  .input-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 17px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .input-btn svg { fill: #b0b0b0; }
+  .mic-btn {
+    width: 34px;
+    height: 34px;
+    background: #2aabee;
+    border-radius: 17px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .mic-btn svg { fill: #fff; }
+</style>
+</head>
+<body>
+
+<div class="iphone">
+  <div class="iphone-screen">
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <div class="dynamic-island"></div>
+      <span class="status-time">9:41</span>
+      <div class="status-icons">
+        <!-- Signal -->
+        <svg width="17" height="12" viewBox="0 0 17 12">
+          <rect x="0" y="6" width="3" height="6" rx="1"/>
+          <rect x="4.5" y="4" width="3" height="8" rx="1"/>
+          <rect x="9" y="2" width="3" height="10" rx="1"/>
+          <rect x="13.5" y="0" width="3" height="12" rx="1"/>
+        </svg>
+        <!-- Wifi -->
+        <svg width="16" height="12" viewBox="0 0 16 12">
+          <path d="M8 9.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z"/>
+          <path d="M8 6C5.8 6 3.8 6.9 2.3 8.4l1.4 1.4C4.9 8.7 6.4 8 8 8s3.1.7 4.3 1.8l1.4-1.4C12.2 6.9 10.2 6 8 6z" opacity=".7"/>
+          <path d="M8 2C4.7 2 1.7 3.3-.1 5.5l1.4 1.4C3 5 5.4 3.5 8 3.5s5 1.5 6.7 3.4l1.4-1.4C14.3 3.3 11.3 2 8 2z" opacity=".4"/>
+        </svg>
+        <!-- Battery -->
+        <svg width="25" height="12" viewBox="0 0 25 12">
+          <rect x="0" y="1" width="21" height="10" rx="3" stroke="#000" stroke-width="1" fill="none"/>
+          <rect x="22" y="3.5" width="2.5" height="5" rx="1.2" fill="#000" opacity=".4"/>
+          <rect x="1.5" y="2.5" width="16" height="7" rx="2" fill="#27ae60"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Telegram Header -->
+    <div class="tg-header">
+      <div class="back-btn">
+        <svg width="12" height="20" viewBox="0 0 12 20"><path d="M11 1L1 10l10 9" stroke="#2aabee" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span style="color:#2aabee;font-size:16px;margin-left:4px">Chats</span>
+      </div>
+      <div class="tg-avatar">CA</div>
+      <div class="tg-info">
+        <div class="tg-name">Coach AI 🏋️</div>
+        <div class="tg-status">bot</div>
+      </div>
+      <div class="tg-actions">
+        <svg width="20" height="20" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7 14 4 11 4 7.5S7 1 10.5 1 17 4 17 7.5 14 14 10.5 14z"/></svg>
+        <svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+      </div>
+    </div>
+
+    <!-- Chat Area -->
+    <div class="chat-area" id="chat">
+
+      <div class="date-divider">
+        <span class="date-pill">Today — May 3, 2026</span>
+      </div>
+
+      <!-- ══════════════════════════════════════════════ -->
+      <!-- STEP 1: /day D1 -->
+      <!-- ══════════════════════════════════════════════ -->
+      <div class="msg-row user">
+        <div class="bubble cmd">
+          /day D1
+          <span class="bubble-time">9:41
+            <span class="tick">
+              <svg width="16" height="10" viewBox="0 0 16 10" fill="#7ec877"><path d="M1 5l4 4L15 1M6 5l4 4"/></svg>
+            </span>
+          </span>
+        </div>
+      </div>
+
+      <div class="separator"></div>
+
+      <div class="msg-row bot">
+        <div class="bubble">
+          <div class="plan-header">
+            ✅ Training day set to <b>D1</b>
+          </div>
+          <div class="plan-day-label">LOWER | STRENGTH</div>
+
+          <div class="plan-ex-row">
+            <div class="plan-ex-num">1</div>
+            <div class="plan-ex-body">
+              <div class="plan-ex-name">Back Squat</div>
+              <div class="plan-ex-info">
+                Barbell · 5×5 · 45 kg/side → 110 kg total<br>
+                <span class="badge">Tonnage: 2,750 kg</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="plan-ex-row">
+            <div class="plan-ex-num">2</div>
+            <div class="plan-ex-body">
+              <div class="plan-ex-name">Leg Press 45°</div>
+              <div class="plan-ex-info">
+                Machine · 3×8 · 90 kg/side → 180 kg total<br>
+                <span class="badge">Tonnage: 4,320 kg</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="plan-ex-row">
+            <div class="plan-ex-num">3</div>
+            <div class="plan-ex-body">
+              <div class="plan-ex-name">RDL / Stiff</div>
+              <div class="plan-ex-info">
+                Barbell · 3×7 · 42.5 kg/side → 105 kg total<br>
+                <span class="badge">Tonnage: 2,205 kg</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="plan-ex-row">
+            <div class="plan-ex-num">4</div>
+            <div class="plan-ex-body">
+              <div class="plan-ex-name">Hip Abduction</div>
+              <div class="plan-ex-info">
+                Cable · 3×15 · 2.5 kg<br>
+                <span class="badge">Tonnage: 112.5 kg</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="plan-ex-row">
+            <div class="plan-ex-num">5</div>
+            <div class="plan-ex-body">
+              <div class="plan-ex-name">Weighted Plank</div>
+              <div class="plan-ex-info">
+                Isometric · 3×35s · 20 kg on back<br>
+                <span class="badge iso">TuT: 105s</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="plan-summary">
+            📦 Planned Volume: <b>9,387.5 kg</b> &nbsp;·&nbsp; 5 exercises
+          </div>
+
+          <span class="bubble-time">9:41</span>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════ -->
+      <!-- STEP 2: Back Squat -->
+      <!-- ══════════════════════════════════════════════ -->
+      <div class="separator"></div>
+      <div class="msg-row user">
+        <div class="bubble">
+          Done squat 5x5 felt solid
+          <span class="bubble-time">9:53
+            <span class="tick">
+              <svg width="16" height="10" viewBox="0 0 16 10" fill="#7ec877"><path d="M1 5l4 4L15 1M6 5l4 4"/></svg>
+            </span>
+          </span>
+        </div>
+      </div>
+
+      <div class="separator"></div>
+
+      <div class="msg-row bot">
+        <div class="bubble">
+
+          <div class="lang-box">
+            <div class="lang-label">🔤 Language Spotter</div>
+            <div class="lang-correction">
+              <s>"Done squat 5x5"</s> → <mark>"I completed 5×5 on the Back Squat"</mark>
+            </div>
+            <div class="lang-tip">💡 "Compound lift" = multi-joint exercise (squat, deadlift, bench)</div>
+          </div>
+
+          <div class="section-header">📊 Session Status — D1</div>
+
+          <div class="exercise-row">
+            <div class="ex-name">1. Back Squat <span class="ex-status-done">✅ DONE</span></div>
+            <div class="ex-detail">
+              <i>Weight:</i> <span>110 kg</span> &nbsp;|&nbsp;
+              <i>Sets×Reps:</i> <span>5×5</span> &nbsp;|&nbsp;
+              <i>Tonnage:</i> <span>2,750 kg</span>
+            </div>
+          </div>
+          <div class="exercise-row">
+            <div class="ex-name ex-status-pending">2. Leg Press 45° ⏳</div>
+          </div>
+          <div class="exercise-row">
+            <div class="ex-name ex-status-pending">3. RDL / Stiff ⏳</div>
+          </div>
+          <div class="exercise-row">
+            <div class="ex-name ex-status-pending">4. Hip Abduction ⏳</div>
+          </div>
+          <div class="exercise-row">
+            <div class="ex-name ex-status-pending">5. Weighted Plank ⏳</div>
+          </div>
+
+          <div class="next-ex-box">
+            <div class="next-ex-label">🏋️ Next Exercise</div>
+            <div class="next-ex-target">Leg Press 45°</div>
+            <div class="next-ex-sub">Target: 3×8 @ 90 kg/side (180 kg total)</div>
+          </div>
+
+          <div class="cues-box">
+            <div class="cues-label">💡 Technical Cues</div>
+            <div class="cues-item">Feet shoulder-width on the platform, toes slightly out</div>
+            <div class="cues-item">Lower until knees reach 90°, don't let knees cave in</div>
+            <div class="cues-item">Drive through heels, extend fully without locking out</div>
+          </div>
+
+          <div class="ready-line">Ready? Set your 2-min rest timer now. ⏱</div>
+          <span class="bubble-time">9:53</span>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════ -->
+      <!-- STEP 3: Leg Press -->
+      <!-- ══════════════════════════════════════════════ -->
+      <div class="separator"></div>
+      <div class="msg-row user">
+        <div class="bubble">
+          Leg press done 3x8 at 180kg
+          <span class="bubble-time">10:06
+            <span class="tick">
+              <svg width="16" height="10" viewBox="0 0 16 10" fill="#7ec877"><path d="M1 5l4 4L15 1M6 5l4 4"/></svg>
+            </span>
+          </span>
+        </div>
+      </div>
+
+      <div class="separator"></div>
+
+      <div class="msg-row bot">
+        <div class="bubble">
+
+          <div class="lang-box">
+            <div class="lang-label">🔤 Language Spotter</div>
+            <div class="lang-correction">
+              <s>"Leg press done 3x8 at 180kg"</s> → <mark>"I completed 3×8 on the Leg Press at 180 kg"</mark>
+            </div>
+            <div class="lang-tip">💡 "Unilateral" = single-leg/arm; "bilateral" = both sides together</div>
+          </div>
+
+          <div class="section-header">📊 Session Status — D1</div>
+
+          <div class="exercise-row">
+            <div class="ex-name">1. Back Squat <span class="ex-status-done">✅ DONE</span></div>
+            <div class="ex-detail"><i>Tonnage:</i> <span>2,750 kg</span></div>
+          </div>
+          <div class="exercise-row">
+            <div class="ex-name">2. Leg Press 45° <span class="ex-status-done">✅ DONE</span></div>
+            <div class="ex-detail">
+              <i>Weight:</i> <span>180 kg</span> &nbsp;|&nbsp;
+              <i>Sets×Reps:</i> <span>3×8</span> &nbsp;|&nbsp;
+              <i>Tonnage:</i> <span>4,320 kg</span>
+            </div>
+          </div>
+          <div class="exercise-row">
+            <div class="ex-name ex-status-pending">3. RDL / Stiff ⏳</div>
+          </div>
+          <div class="exercise-row">
+            <div class="ex-name ex-status-pending">4. Hip Abduction ⏳</div>
+          </div>
+          <div class="exercise-row">
+            <div class="ex-name ex-status-pending">5. Weighted Plank ⏳</div>
+          </div>
+
+          <div class="next-ex-box">
+            <div class="next-ex-label">🏋️ Next Exercise</div>
+            <div class="next-ex-target">RDL / Stiff</div>
+            <div class="next-ex-sub">Target: 3×7 @ 42.5 kg/side (105 kg total)</div>
+          </div>
+
+          <div class="cues-box">
+            <div class="cues-label">💡 Technical Cues</div>
+            <div class="cues-item">Hip hinge — push hips back, don't squat down</div>
+            <div class="cues-item">Bar stays close to the body throughout the movement</div>
+            <div class="cues-item">Neutral spine from neck to tailbone, no rounding</div>
+          </div>
+
+          <div class="ready-line">Rest 2 min. You're halfway through the strength block. 💪</div>
+          <span class="bubble-time">10:06</span>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════ -->
+      <!-- STEP 4: RDL -->
+      <!-- ══════════════════════════════════════════════ -->
+      <div class="separator"></div>
+      <div class="msg-row user">
+        <div class="bubble">
+          RDL completed 3x7 with 105kg
+          <span class="bubble-time">10:19
+            <span class="tick">
+              <svg width="16" height="10" viewBox="0 0 16 10" fill="#7ec877"><path d="M1 5l4 4L15 1M6 5l4 4"/></svg>
+            </span>
+          </span>
+        </div>
+      </div>
+
+      <div class="separator"></div>
+
+      <div class="msg-row bot">
+        <div class="bubble">
+
+          <div class="lang-box">
+            <div class="lang-label">🔤 Language Spotter</div>
+            <div class="lang-correction">
+              ✅ Correct phrasing — well done!
+            </div>
+            <div class="lang-tip">💡 "RDL" = Romanian Deadlift — named after Romanian weightlifter Nicu Vlad</div>
+          </div>
+
+          <div class="section-header">📊 Session Status — D1</div>
+
+          <div class="exercise-row">
+            <div class="ex-name">1. Back Squat <span class="ex-status-done">✅ DONE</span></div>
+            <div class="ex-detail"><i>Tonnage:</i> <span>2,750 kg</span></div>
+          </div>
+          <div class="exercise-row">
+            <div class="ex-name">2. Leg Press 45° <span class="ex-status-done">✅ DONE</span></div>
+            <div class="ex-detail"><i>Tonnage:</i> <span>4,320 kg</span></div>
+          </div>
+          <div class="exercise-row">
+            <div class="ex-name">3. RDL / Stiff <span class="ex-status-done">✅ DONE</span></div>
+            <div class="ex-detail">
+              <i>Weight:</i> <span>105 kg</span> &nbsp;|&nbsp;
+              <i>Sets×Reps:</i> <span>3×7</span> &nbsp;|&nbsp;
+              <i>Tonnage:</i> <span>2,205 kg</span>
+            </div>
+          </div>
+          <div class="exercise-row">
+            <div class="ex-name ex-status-pending">4. Hip Abduction ⏳</div>
+          </div>
+          <div class="exercise-row">
+            <div class="ex-name ex-status-pending">5. Weighted Plank ⏳</div>
+          </div>
+
+          <div class="next-ex-box">
+            <div class="next-ex-label">🏋️ Next Exercise</div>
+            <div class="next-ex-target">Hip Abduction</div>
+            <div class="next-ex-sub">Target: 3×15 @ 2.5 kg (cable machine)</div>
+          </div>
+
+          <div class="cues-box">
+            <div class="cues-label">💡 Technical Cues</div>
+            <div class="cues-item">Stand sideways to the cable, ankle attachment clipped in</div>
+            <div class="cues-item">Keep core braced and torso upright — avoid lateral lean</div>
+            <div class="cues-item">Controlled return phase — don't let the cable yank you back</div>
+          </div>
+
+          <div class="ready-line">Light weight, but focus on mind-muscle connection. 🎯</div>
+          <span class="bubble-time">10:19</span>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════ -->
+      <!-- STEP 5: Hip Abduction -->
+      <!-- ══════════════════════════════════════════════ -->
+      <div class="separator"></div>
+      <div class="msg-row user">
+        <div class="bubble">
+          Hip abduction 3x15 done cable 2.5kg
+          <span class="bubble-time">10:29
+            <span class="tick">
+              <svg width="16" height="10" viewBox="0 0 16 10" fill="#7ec877"><path d="M1 5l4 4L15 1M6 5l4 4"/></svg>
+            </span>
+          </span>
+        </div>
+      </div>
+
+      <div class="separator"></div>
+
+      <div class="msg-row bot">
+        <div class="bubble">
+
+          <div class="lang-box">
+            <div class="lang-label">🔤 Language Spotter</div>
+            <div class="lang-correction">
+              <s>"Hip abduction 3x15 done cable 2.5kg"</s> → <mark>"I completed 3×15 Hip Abduction on the cable at 2.5 kg"</mark>
+            </div>
+            <div class="lang-tip">💡 "Abduction" = moving limb away from body centerline (opposite: adduction)</div>
+          </div>
+
+          <div class="section-header">📊 Session Status — D1</div>
+
+          <div class="exercise-row">
+            <div class="ex-name">1. Back Squat <span class="ex-status-done">✅ DONE</span></div>
+            <div class="ex-detail"><i>Tonnage:</i> <span>2,750 kg</span></div>
+          </div>
+          <div class="exercise-row">
+            <div class="ex-name">2. Leg Press 45° <span class="ex-status-done">✅ DONE</span></div>
+            <div class="ex-detail"><i>Tonnage:</i> <span>4,320 kg</span></div>
+          </div>
+          <div class="exercise-row">
+            <div class="ex-name">3. RDL / Stiff <span class="ex-status-done">✅ DONE</span></div>
+            <div class="ex-detail"><i>Tonnage:</i> <span>2,205 kg</span></div>
+          </div>
+          <div class="exercise-row">
+            <div class="ex-name">4. Hip Abduction <span class="ex-status-done">✅ DONE</span></div>
+            <div class="ex-detail">
+              <i>Weight:</i> <span>2.5 kg</span> &nbsp;|&nbsp;
+              <i>Sets×Reps:</i> <span>3×15</span> &nbsp;|&nbsp;
+              <i>Tonnage:</i> <span>112.5 kg</span>
+            </div>
+          </div>
+          <div class="exercise-row">
+            <div class="ex-name ex-status-pending">5. Weighted Plank ⏳</div>
+          </div>
+
+          <div class="next-ex-box">
+            <div class="next-ex-label">🏋️ Next Exercise</div>
+            <div class="next-ex-target">Weighted Plank</div>
+            <div class="next-ex-sub">Target: 3×35s @ 20 kg plate on back</div>
+          </div>
+
+          <div class="cues-box">
+            <div class="cues-label">💡 Technical Cues</div>
+            <div class="cues-item">Have a partner place the plate on your lower back, or use a stable setup</div>
+            <div class="cues-item">Squeeze glutes and brace your abs throughout every second</div>
+            <div class="cues-item">Breathe steadily — never hold your breath on an isometric hold</div>
+          </div>
+
+          <div class="ready-line">Last exercise! One more effort. 🔥</div>
+          <span class="bubble-time">10:29</span>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════ -->
+      <!-- STEP 6: Weighted Plank -->
+      <!-- ══════════════════════════════════════════════ -->
+      <div class="separator"></div>
+      <div class="msg-row user">
+        <div class="bubble">
+          Plank done 3 sets 35 seconds 20kg on back
+          <span class="bubble-time">10:40
+            <span class="tick">
+              <svg width="16" height="10" viewBox="0 0 16 10" fill="#7ec877"><path d="M1 5l4 4L15 1M6 5l4 4"/></svg>
+            </span>
+          </span>
+        </div>
+      </div>
+
+      <div class="separator"></div>
+
+      <div class="msg-row bot">
+        <div class="bubble">
+
+          <div class="lang-box">
+            <div class="lang-label">🔤 Language Spotter</div>
+            <div class="lang-correction">
+              <s>"Plank done 3 sets 35 seconds"</s> → <mark>"I completed 3 sets of 35s on the Weighted Plank"</mark>
+            </div>
+            <div class="lang-tip">💡 "TuT" = Time under Tension — total seconds your muscles are working</div>
+          </div>
+
+          <div class="section-header">📊 Session Status — D1 &nbsp;<span style="color:#27ae60">✅ COMPLETE</span></div>
+
+          <div class="exercise-row">
+            <div class="ex-name">1. Back Squat <span class="ex-status-done">✅ DONE</span></div>
+            <div class="ex-detail"><i>5×5 @ 110 kg</i> | <span>2,750 kg</span></div>
+          </div>
+          <div class="exercise-row">
+            <div class="ex-name">2. Leg Press 45° <span class="ex-status-done">✅ DONE</span></div>
+            <div class="ex-detail"><i>3×8 @ 180 kg</i> | <span>4,320 kg</span></div>
+          </div>
+          <div class="exercise-row">
+            <div class="ex-name">3. RDL / Stiff <span class="ex-status-done">✅ DONE</span></div>
+            <div class="ex-detail"><i>3×7 @ 105 kg</i> | <span>2,205 kg</span></div>
+          </div>
+          <div class="exercise-row">
+            <div class="ex-name">4. Hip Abduction <span class="ex-status-done">✅ DONE</span></div>
+            <div class="ex-detail"><i>3×15 @ 2.5 kg</i> | <span>112.5 kg</span></div>
+          </div>
+          <div class="exercise-row">
+            <div class="ex-name">5. Weighted Plank <span class="ex-status-done">✅ DONE</span></div>
+            <div class="ex-detail"><i>3×35s @ 20 kg</i> | <span>TuT: 105s</span></div>
+          </div>
+
+          <div class="summary-box">
+            <div class="summary-total">🏆 Total Tonnage: 9,387.5 kg</div>
+          </div>
+
+          <div class="ready-line" style="color:#27ae60;font-style:normal;font-weight:600;border:none;margin-top:8px;">
+            🎉 All 5 exercises complete!<br>
+            <span style="color:#555;font-weight:400;font-size:12.5px">Type /done to save your session.</span>
+          </div>
+
+          <span class="bubble-time">10:40</span>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════ -->
+      <!-- STEP 7: /done -->
+      <!-- ══════════════════════════════════════════════ -->
+      <div class="separator"></div>
+      <div class="msg-row user">
+        <div class="bubble cmd">
+          /done
+          <span class="bubble-time">10:41
+            <span class="tick">
+              <svg width="16" height="10" viewBox="0 0 16 10" fill="#7ec877"><path d="M1 5l4 4L15 1M6 5l4 4"/></svg>
+            </span>
+          </span>
+        </div>
+      </div>
+
+      <div class="separator"></div>
+
+      <div class="msg-row bot">
+        <div class="bubble">
+          <div class="complete-msg">
+            <span class="emoji-big">🏋️</span>
+            <div class="title">Session complete! Workout saved.</div>
+            <div class="subtitle">Great work on <b>D1 — Lower Strength</b>! 💪</div>
+          </div>
+
+          <div class="summary-box" style="margin-top:10px;">
+            <div class="summary-ex-row">
+              <span>Back Squat</span>
+              <span class="done-tag">5×5 · 2,750 kg ✅</span>
+            </div>
+            <div class="summary-ex-row">
+              <span>Leg Press 45°</span>
+              <span class="done-tag">3×8 · 4,320 kg ✅</span>
+            </div>
+            <div class="summary-ex-row">
+              <span>RDL / Stiff</span>
+              <span class="done-tag">3×7 · 2,205 kg ✅</span>
+            </div>
+            <div class="summary-ex-row">
+              <span>Hip Abduction</span>
+              <span class="done-tag">3×15 · 112.5 kg ✅</span>
+            </div>
+            <div class="summary-ex-row">
+              <span>Weighted Plank</span>
+              <span class="done-tag">3×35s · TuT 105s ✅</span>
+            </div>
+            <div class="summary-total" style="margin-top:6px;margin-bottom:0;font-size:14px;">
+              Total: 9,387.5 kg 🏆
+            </div>
+          </div>
+
+          <div style="text-align:center;font-size:12px;color:#aaa;margin-top:8px;">
+            Saved to logs/2026-05-03.md
+          </div>
+
+          <span class="bubble-time">10:41</span>
+        </div>
+      </div>
+
+      <div style="height:8px;"></div>
+
+    </div><!-- /chat-area -->
+
+    <!-- Input Bar -->
+    <div class="input-bar">
+      <div class="input-btn">
+        <svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg>
+      </div>
+      <div class="input-field">Message</div>
+      <div class="input-btn">
+        <svg width="22" height="22" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </div>
+      <div class="mic-btn">
+        <svg width="14" height="20" viewBox="0 0 14 20"><path d="M7 12c1.66 0 3-1.34 3-3V3c0-1.66-1.34-3-3-3S4 1.34 4 3v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S1.7 12 1.7 9H0c0 3.41 2.72 6.23 6 6.72V19h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>
+      </div>
+    </div>
+
+  </div><!-- /iphone-screen -->
+</div><!-- /iphone -->
+
+<script>
+  // Auto-scroll chat to bottom on load
+  const chat = document.getElementById('chat');
+  chat.scrollTop = chat.scrollHeight;
+</script>
+
+</body>
+</html>
