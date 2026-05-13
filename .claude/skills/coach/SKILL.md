@@ -111,6 +111,115 @@ After the Day Plan table and summary, execute Steps 3–5 of the Interaction Loo
 4. **Technical Cues** — 3 bullet points
 5. **Ready?** — Closing question
 
+## `/help` & `/start` Command Handlers
+
+### Rule: Keep These Updated
+
+**Every new slash command must be added to both `/help` and `/start` as part of the same change.** See `CLAUDE.md` MUST Rules.
+
+---
+
+### `/help` — Available Commands
+
+When the user's message contains `/help`:
+
+List all available slash commands with a one-line description each. Language Spotter runs; do NOT continue the Interaction Loop after this output.
+
+**Format (Markdown):**
+
+```
+/day <DX>        — Show the full Day Plan for D1, D2, D4, or D5 and start the session
+/trainings       — Overview of all 4 training days with exercises (read-only)
+/training <DX>   — Detailed exercise list for a specific day (read-only)
+/help            — Show this command list
+/start           — Welcome message and command list
+```
+
+---
+
+### `/start` — Welcome Message
+
+When the user's message contains `/start`:
+
+Output a brief welcome message followed by the same command list as `/help`. Language Spotter runs; do NOT continue the Interaction Loop after this output.
+
+**Format:**
+
+```
+Welcome, Fabiano! 💪 Here's what you can do:
+
+/day <DX>        — Show the full Day Plan for D1, D2, D4, or D5 and start the session
+/trainings       — Overview of all 4 training days with exercises (read-only)
+/training <DX>   — Detailed exercise list for a specific day (read-only)
+/help            — Show this command list
+/start           — Welcome message and command list
+```
+
+---
+
+## `/trainings` & `/training <DX>` Command Handlers
+
+### Important: Display-Only
+
+These commands are **read-only program views** — do not continue the Interaction Loop. After rendering, **STOP**. Steps 3–5 (Next Exercise, Technical Cues, Ready?) must NOT be executed.
+
+Language Spotter still runs at the top. If the message is a bare command with no grammar to correct, note "No corrections needed."
+
+---
+
+### `/trainings` — Full Program Overview
+
+When the user's message contains `/trainings` (trailing args are ignored — always show all 4 days):
+
+Render a numbered exercise list for each training day in order: **D1, D2, D4, D5**.
+
+**Per-day format:**
+
+```
+D1 — LOWER | STRENGTH
+1. Back Squat — 5×5 @ 110kg
+2. Leg Press 45° — 3×8 @ 180kg
+...
+```
+
+Line format: `N. {name} — {sets}×{reps} @ {weight}`
+
+Apply the same Sets × Reps and Weight conventions from the `/day <DX>` handler:
+- Fixed reps → `5×5`, `3×8`
+- Rep ranges → `4×10-12`
+- Isometric → `3×35s`, weight as `Xkg` (weight plate)
+- Barbell (`total_weight_kg`) → `110kg`
+- Cable/machine (`weight_kg`) → `22kg`
+- Per-side dumbbell/machine (`weight_per_side_kg`) → `Xkg/side`
+- Range per-side (D5 Chest Fly) → `X–Ykg/side`
+
+No tonnage, no Status, no Notes columns.
+
+---
+
+### `/training <DX>` — Single Day Detail
+
+When the user's message contains `/training D1`, `/training D2`, `/training D4`, or `/training D5`:
+
+Render the Day Plan table from the `/day <DX>` handler, **omitting the Status column** (read-only view, not an active session):
+
+| # | Exercise | Target | Weight (kg) | Sets × Reps | Tonnage (kg) | Notes |
+| :---: | :--- | :--- | :---: | :---: | :---: | :--- |
+
+Apply all fill-rules from the `/day <DX>` handler (same Weight, Sets × Reps, Tonnage, and Notes logic — including isometric TuT, rep-range midpoints, and superset `*(SS)*` flags).
+
+After the table, render the summary line:
+> **Planned Volume:** X,XXX kg | **Exercises:** N
+
+#### Error Handling
+
+| Input | Response |
+| :--- | :--- |
+| `/training D3`, `/training D6`, `/training D7` | "D3, D6, and D7 are rest days — no exercises planned. Valid training days are D1, D2, D4, and D5." |
+| `/training foo` or `/training` (no arg) | "Unknown day. Valid options: D1, D2, D4, D5." |
+
+---
+
 ## Files Referenced
 - `prompts/SYSTEM_PROMPT.md` — full behavior definition
 - `data/program.json` — training program data
