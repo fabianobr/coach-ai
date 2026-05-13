@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -260,6 +261,7 @@ async def test_d1_full_workout_e2e(d1_bot):
 
     assert mock_logger.save.call_count == 1
     assert mock_logger.save.call_args.args[0] == "D1"
+    assert mock_logger.save.call_args.args[1] == datetime.now().strftime("%Y-%m-%d")
 
     reply = update.message.reply_text.call_args.args[0]
     assert "Session complete" in reply
