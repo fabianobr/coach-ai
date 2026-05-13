@@ -11,7 +11,7 @@ from telegram.error import BadRequest
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 from coach.constants import DAY_LABELS
-from coach.day_plan import render_day_plan_formatted_list, render_day_plan_summary
+from coach.day_plan import render_day_plan_formatted_list, render_day_plan_summary, render_trainings_overview
 from coach.llm import Message, get_provider
 from coach.logger import SessionLogger
 from coach.paths import get_resource_path
@@ -54,6 +54,8 @@ class CoachBot:
 
         app.add_handler(CommandHandler("start", self.handle_start))
         app.add_handler(CommandHandler("day", self.handle_day))
+        app.add_handler(CommandHandler("trainings", self.handle_trainings))
+        app.add_handler(CommandHandler("training", self.handle_training))
         app.add_handler(CommandHandler("done", self.handle_done))
         app.add_handler(CommandHandler("status", self.handle_status))
         app.add_handler(CommandHandler("help", self.handle_help))
@@ -71,7 +73,9 @@ class CoachBot:
         await update.message.reply_text(
             "Welcome to <b>Coach AI</b>! 🏋️\n\n"
             "Send me a workout message or use:\n"
-            "<code>/day D1</code> — Set training day (D1/D2/D4/D5)\n"
+            "<code>/day D1</code> — Set training day and start session (D1/D2/D4/D5)\n"
+            "<code>/trainings</code> — Overview of all training days\n"
+            "<code>/training D1</code> — Exercises for a specific day (read-only)\n"
             "<code>/status</code> — See today's exercises\n"
             "<code>/done</code> — End session &amp; save log\n"
             "<code>/help</code> — Show this message",
@@ -287,6 +291,50 @@ class CoachBot:
             # Append to session history only if streaming succeeded and we have content
             if streaming_succeeded and full_response:
                 session.messages.append(Message(role="assistant", content=full_response))
+
+    async def handle_trainings(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not self.program:
+            await update.message.reply_text("Training program not loaded.", parse_mode=ParseMode.HTML)
+            return
+        overview = render_trainings_overview(self.program)
+        await self._safe_reply(update.message, overview)
+
+    async def handle_training(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not context.args:
+            await update.message.reply_text(
+                "Unknown day. Valid options: <code>D1</code>, <code>D2</code>, <code>D4</code>, <code>D5</code>.",
+                parse_mode=ParseMode.HTML,
+            )
+            return
+
+        day_id = context.args[0].upper()
+        if day_id in ("D3", "D6", "D7"):
+            await update.message.reply_text(
+                "D3, D6, and D7 are rest days — no exercises planned. "
+                "Valid training days are D1, D2, D4, and D5.",
+                parse_mode=ParseMode.HTML,
+            )
+            return
+        if day_id not in ("D1", "D2", "D4", "D5"):
+            await update.message.reply_text(
+                "Unknown day. Valid options: <code>D1</code>, <code>D2</code>, <code>D4</code>, <code>D5</code>.",
+                parse_mode=ParseMode.HTML,
+            )
+            return
+
+        day_label = DAY_LABELS.get(day_id, "")
+        reply_lines = [f"📋 <b>{day_id} — {day_label}</b>"]
+
+        if self.program and day_id in self.program.get("days", {}):
+            exercises = self.program["days"][day_id].get("exercises", [])
+            formatted_list, total_volume = render_day_plan_formatted_list(self.program, day_id)
+            if formatted_list:
+                reply_lines.append("")
+                reply_lines.append(formatted_list)
+                reply_lines.append("")
+                reply_lines.append(render_day_plan_summary(day_id, total_volume, len(exercises)))
+
+        await self._safe_reply(update.message, "\n".join(reply_lines))
 
     async def handle_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await self.handle_start(update, context)
