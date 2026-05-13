@@ -2,6 +2,10 @@
 
 from typing import Any
 
+from coach.constants import DAY_LABELS
+
+TRAINING_DAYS = ["D1", "D2", "D4", "D5"]
+
 
 def format_weight(exercise: dict[str, Any]) -> str:
     """Format weight display based on exercise type and available fields."""
@@ -155,3 +159,35 @@ def render_day_plan_formatted_list(program: dict, day_id: str) -> tuple[str, flo
 def render_day_plan_summary(day_id: str, total_volume: float, exercise_count: int) -> str:
     """Render the Day Plan summary line showing total volume and exercise count."""
     return f"<b>Planned Volume:</b> {int(total_volume):,} kg  |  <b>Exercises:</b> {exercise_count}"
+
+
+def _format_weight_compact(exercise: dict[str, Any]) -> str:
+    """Format weight for the compact overview. Isometric shows plate weight instead of '—'."""
+    if exercise.get("isometric") and "weight_kg" in exercise:
+        return f"{exercise['weight_kg']:.0f}kg"
+    return format_weight(exercise)
+
+
+def render_trainings_overview(program: dict) -> str:
+    """
+    Render a compact overview of all training days for the /trainings command.
+
+    Format per day:
+        <b>D1 — LOWER | STRENGTH</b>
+        1. Back Squat — 5×5 @ 110kg
+        2. Leg Press 45° — 3×8 @ 180kg
+        ...
+    """
+    sections = []
+    for day_id in TRAINING_DAYS:
+        label = DAY_LABELS.get(day_id, "")
+        exercises = program.get("days", {}).get(day_id, {}).get("exercises", [])
+        lines = [f"<b>{day_id} — {label}</b>"]
+        for ex in exercises:
+            order = ex.get("order", "?")
+            name = ex.get("name", "Unknown")
+            sets_reps = format_sets_reps(ex)
+            weight = _format_weight_compact(ex)
+            lines.append(f"{order}. {name} — {sets_reps} @ {weight}")
+        sections.append("\n".join(lines))
+    return "\n\n".join(sections)

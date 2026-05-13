@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## MUST Rules
 
 - **When asked to review, only report findings — never proactively apply fixes.** Present suggestions and wait for explicit instruction before making any changes.
+- **Every new slash command added to `SKILL.md` or `SYSTEM_PROMPT.md` must also be listed in the `/help` and `/start` handlers in both files.** Update those handlers as part of the same change — never add a command without registering it there.
 - **All architecture diagrams must use Mermaid format.** No ASCII art, Graphviz, or other diagram formats in documentation. This includes: C4 models, sequence diagrams, state diagrams, class diagrams, flowcharts, and data flow diagrams. See `docs/ARCHITECTURE.md` for examples.
 
 ## Project Overview
