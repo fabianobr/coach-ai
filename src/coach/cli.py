@@ -1,7 +1,10 @@
+import re
 import sys
 
+from coach.day_plan import render_trainings_overview
 from coach.llm import Message, get_provider
 from coach.paths import get_resource_path
+from coach.programs import ActiveProgramNotConfigured, load_active_program
 
 
 class CoachCLI:
@@ -9,13 +12,22 @@ class CoachCLI:
         self.history: list[Message] = []
         self.provider = None
         self.system_prompt: str | None = None
+        self.program: dict | None = None
 
     def run(self) -> None:
         try:
-            self.system_prompt = self._load_system_prompt()
+            base_prompt = self._load_system_prompt()
         except FileNotFoundError as e:
             print(f"Error: {e}")
             sys.exit(1)
+
+        try:
+            self.program = load_active_program()
+        except ActiveProgramNotConfigured as e:
+            print(f"Error: {e}")
+            sys.exit(1)
+
+        self.system_prompt = self._build_system_prompt_with_snapshot(base_prompt)
 
         try:
             self.provider = get_provider()
@@ -23,7 +35,8 @@ class CoachCLI:
             print(f"Error: failed to initialize provider — {e}")
             sys.exit(1)
 
-        print("Coach AI ready. Type /help for commands, /quit to exit.\n")
+        program_name = self.program.get("name", "unknown")
+        print(f"Coach AI ready — program: {program_name}. Type /help for commands, /quit to exit.\n")
 
         try:
             while True:
@@ -43,6 +56,13 @@ class CoachCLI:
         except FileNotFoundError as e:
             raise FileNotFoundError(str(e)) from e
         return path.read_text(encoding="utf-8")
+
+    def _build_system_prompt_with_snapshot(self, base_prompt: str) -> str:
+        if not self.program:
+            return base_prompt
+        overview = render_trainings_overview(self.program)
+        plain = re.sub(r'<[^>]+>', '', overview)
+        return base_prompt + "\n\n## CURRENT PROGRAM SNAPSHOT\n\n" + plain
 
     def _stream_response(self) -> str | None:
         full_response = ""
