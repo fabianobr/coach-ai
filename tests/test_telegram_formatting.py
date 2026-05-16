@@ -16,7 +16,7 @@ from src.coach.telegram.formatting import markdown_to_html
 
 
 def load_program():
-    """Load the training program from data/program.json."""
+    """Load the training program from data/programs/."""
     program_path = Path(__file__).parent.parent / "data" / "programs" / "powerbuilding-4d.json"
     with open(program_path) as f:
         return json.load(f)

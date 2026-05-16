@@ -195,7 +195,7 @@ coach-ai/
 │   └── start_telegram_bot.sh  ← Or this (bash version)
 ├── prompts/
 │   └── SYSTEM_PROMPT.md       ← AI behavior definition
-├── data/program.json           ← Training program
+├── data/programs/              ← Training program definitions
 ├── src/
 │   └── coach/
 │       ├── telegram/
