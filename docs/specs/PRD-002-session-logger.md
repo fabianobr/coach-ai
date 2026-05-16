@@ -1,5 +1,7 @@
 # PRD: Session Logger
 
+> **Note:** This spec is superseded by the dynamic program system implemented in feat/dynamic-programs. See `data/programs/` and `src/coach/programs.py` for the current implementation.
+
 ## Problem Statement
 
 Workout data entered during a coaching session is ephemeral — it is lost when the conversation ends. Without persistent logs, the system cannot:
