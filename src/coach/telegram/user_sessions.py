@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class UserSession:
     user_id: int
     messages: list[Message] = field(default_factory=list)
-    current_day: str = "D1"
+    current_day: str | None = None
     exercises: list[ExerciseResult] = field(default_factory=list)
     created_at: datetime = field(default_factory=datetime.now)
 

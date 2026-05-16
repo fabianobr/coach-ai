@@ -2,9 +2,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 
-from coach.constants import DAY_LABELS
-
-
 # ---------------------------------------------------------------------------
 # Enums / exceptions / dataclasses
 # ---------------------------------------------------------------------------
@@ -51,8 +48,6 @@ class SessionLog:
 # Tonnage calculation
 # ---------------------------------------------------------------------------
 
-_BARBELL_BAR_KG = 20.0
-
 
 def compute_tonnage(
     exercise_type: str,
@@ -61,11 +56,12 @@ def compute_tonnage(
     sets: int,
     weight_per_side_kg: float | None = None,
     is_isometric: bool = False,
+    barbell_weight_kg: float = 20.0,
 ) -> float | None:
     """
     Returns the tonnage for an exercise, or None for isometric exercises.
 
-    Barbell formula: (weight_per_side_kg × 2 + 20kg bar) × reps × sets
+    Barbell formula: (weight_per_side_kg × 2 + barbell_weight_kg bar) × reps × sets
     Machine/cable/dumbbell/weighted: weight_kg × reps × sets
     Isometric: None (track as TuT)
     """
@@ -75,7 +71,7 @@ def compute_tonnage(
     if exercise_type == "barbell":
         if weight_per_side_kg is None:
             return None
-        total_weight = weight_per_side_kg * 2 + _BARBELL_BAR_KG
+        total_weight = weight_per_side_kg * 2 + barbell_weight_kg
         return total_weight * reps * sets
 
     if weight_kg is None:
@@ -109,11 +105,15 @@ class SessionLogger:
             raise MissingDataError(exercise_result.name, "weight_kg")
         self._results.append(exercise_result)
 
-    def save(self, day_id: str, date: str, duration_minutes: int = 0) -> Path:
+    def save(
+        self,
+        day_id: str,
+        date: str,
+        duration_minutes: int = 0,
+        program_id: str = "",
+        day_label: str = "",
+    ) -> Path:
         """Write session log to logs/{date}.md. Raises FileExistsError if already exists."""
-        if day_id not in DAY_LABELS:
-            raise ValueError(f"Invalid day_id: {day_id}. Must be one of {list(DAY_LABELS)}")
-
         self.logs_dir.mkdir(parents=True, exist_ok=True)
         log_path = self.logs_dir / f"{date}.md"
 
@@ -123,7 +123,6 @@ class SessionLogger:
         total_tonnage = sum(
             r.tonnage_kg for r in self._results if r.tonnage_kg is not None
         )
-        day_label = DAY_LABELS[day_id]
 
         lines: list[str] = [
             f"# Daily Training Log — {day_label} | {date}",
@@ -138,10 +137,11 @@ class SessionLogger:
             f"| **Day** | {day_id} — {day_label} |",
             f"| **Total Tonnage** | {total_tonnage:.0f} kg |",
             f"| **Session Duration** | {duration_minutes} min |",
+            f"| **Program** | {program_id} |",
             "",
             "---",
             "",
-            f"## Exercise Tracking",
+            "## Exercise Tracking",
             "",
             f"### {day_id}: {day_label}",
             "",
