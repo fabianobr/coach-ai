@@ -53,6 +53,8 @@ def test_handle_day_valid():
     store = UserSessionStore()
     session = store.get_or_create(111)
 
+    assert session.current_day is None
+    session.current_day = "D1"
     assert session.current_day == "D1"
     session.current_day = "D2"
     assert session.current_day == "D2"
