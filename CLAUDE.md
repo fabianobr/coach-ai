@@ -124,6 +124,9 @@ Tests import via `from src.coach.llm... import ...` (e.g. `tests/test_llm_provid
 
 ## Next Steps (In Development)
 
-- **CLI program snapshot** — `cli.py` does not yet inject `## CURRENT PROGRAM SNAPSHOT` into the system prompt the way the Telegram bot does. Add `load_active_program()` + snapshot injection to `CoachCLI.__init__` so the CLI stays grounded to the active program.
 - **PR detection cross-program** — `logger.detect_prs()` scans all prior logs regardless of program. Filter by `program_id` (already written to the Session Overview table) to avoid flagging a weight PR that belongs to a different program.
 - **CLI slash commands** — `/day`, `/programs`, `/program switch` etc. are only wired in the Telegram bot. A thin command dispatcher in `cli.py` would make the CLI a full-featured alternative to Telegram.
+
+## Dev Notes
+
+**After removing a git worktree**, run `pip install -e ".[anthropic,dev]"` from the repo root. The editable install's `.pth` file records the worktree's `src/` path; once the worktree is deleted, `import coach` breaks until reinstalled.
