@@ -47,7 +47,7 @@ coach-ai runs in **three independent runtimes**:
 
 3. **REST API** (`src/coach/api/`) — FastAPI service (`python -m coach.api`). Exposes a `/chat` endpoint backed by the same LLM abstraction layer.
 
-A **CLI** (`python -m coach`) also exists for local interactive use, but does not yet inject the program snapshot into the system prompt.
+A **CLI** (`python -m coach`) also exists for local interactive use. Like the Telegram bot and REST API, it loads the active program at startup and injects the `## CURRENT PROGRAM SNAPSHOT` block into the system prompt (`src/coach/cli.py:_build_system_prompt_with_snapshot`).
 
 ### LLM Abstraction Layer (`src/coach/llm/`)
 
