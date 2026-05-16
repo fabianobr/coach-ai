@@ -88,6 +88,8 @@ def list_programs() -> list[dict]:
 
 def get_program(program_id: str) -> dict:
     """Load any program by id. Raises ProgramNotFound if not found."""
+    if not _PROGRAM_ID_PATTERN.match(program_id):
+        raise ProgramNotFound(f"Program '{program_id}' not found.")
     programs_dir = get_programs_dir()
     program_file = programs_dir / f"{program_id}.json"
 
@@ -106,6 +108,8 @@ def switch_program(program_id: str) -> None:
     Raises:
         ProgramNotFound: if the program file doesn't exist.
     """
+    if not _PROGRAM_ID_PATTERN.match(program_id):
+        raise ProgramNotFound(f"Program '{program_id}' not found.")
     programs_dir = get_programs_dir()
     program_file = programs_dir / f"{program_id}.json"
 
@@ -145,6 +149,8 @@ def clone_program(src_id: str, dst_id: str) -> Path:
     """
     if not _PROGRAM_ID_PATTERN.match(dst_id):
         raise InvalidProgramId(f"Invalid program id '{dst_id}'. Must match ^[a-z0-9-]+$.")
+    if not _PROGRAM_ID_PATTERN.match(src_id):
+        raise ProgramNotFound(f"Program '{src_id}' not found.")
 
     programs_dir = get_programs_dir()
     src_file = programs_dir / f"{src_id}.json"
