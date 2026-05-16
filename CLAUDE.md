@@ -39,11 +39,15 @@ ruff format src/ tests/
 
 ## Architecture
 
-coach-ai runs in **two independent runtimes**:
+coach-ai runs in **three independent runtimes**:
 
-1. **Claude Code skill (current user entry point)** — `.claude/skills/coach/SKILL.md` loads `prompts/SYSTEM_PROMPT.md` and the active program from `data/programs/` to deliver the full dual-role coaching experience directly inside Claude Code.
+1. **Claude Code skill** — `.claude/skills/coach/SKILL.md` loads `prompts/SYSTEM_PROMPT.md` and the active program from `data/programs/` to deliver the full dual-role coaching experience directly inside Claude Code.
 
-2. **Python LLM library (`src/coach/llm/`)** — Provider-agnostic chat client for future CLI, REST, and Telegram entry points. The Python layer does **not** currently load `prompts/SYSTEM_PROMPT.md`—that integration is planned (see Next Steps).
+2. **Telegram bot** (`src/coach/telegram/`) — production entry point. Loads the active program at startup, injects a `## CURRENT PROGRAM SNAPSHOT` block into the system prompt, and handles all slash commands.
+
+3. **REST API** (`src/coach/api/`) — FastAPI service (`python -m coach.api`). Exposes a `/chat` endpoint backed by the same LLM abstraction layer.
+
+A **CLI** (`python -m coach`) also exists for local interactive use, but does not yet inject the program snapshot into the system prompt.
 
 ### LLM Abstraction Layer (`src/coach/llm/`)
 
@@ -120,7 +124,6 @@ Tests import via `from src.coach.llm... import ...` (e.g. `tests/test_llm_provid
 
 ## Next Steps (In Development)
 
-- **Coach core** — CLI entry point (`python -m coach`) with full interaction loop
-- **Session logger** — persist workouts to `logs/YYYY-MM-DD.md`
-- **REST API** — FastAPI `/chat` endpoint
-- **Telegram bot** — handler for workout queries
+- **CLI program snapshot** — `cli.py` does not yet inject `## CURRENT PROGRAM SNAPSHOT` into the system prompt the way the Telegram bot does. Add `load_active_program()` + snapshot injection to `CoachCLI.__init__` so the CLI stays grounded to the active program.
+- **PR detection cross-program** — `logger.detect_prs()` scans all prior logs regardless of program. Filter by `program_id` (already written to the Session Overview table) to avoid flagging a weight PR that belongs to a different program.
+- **CLI slash commands** — `/day`, `/programs`, `/program switch` etc. are only wired in the Telegram bot. A thin command dispatcher in `cli.py` would make the CLI a full-featured alternative to Telegram.
