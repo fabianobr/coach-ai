@@ -61,3 +61,17 @@ def get_resource_path(resource_name: str) -> Path:
         f"Resource '{resource_name}' not found. "
         f"Set {env_key} environment variable to override the path."
     )
+
+
+def get_programs_dir() -> Path:
+    """Returns COACH_PROGRAMS_DIR_PATH env var path if set, else <repo>/data/programs."""
+    if env_path := os.getenv("COACH_PROGRAMS_DIR_PATH"):
+        return Path(env_path)
+    return Path(__file__).parent.parent.parent / "data" / "programs"
+
+
+def get_logs_dir() -> Path:
+    """Returns COACH_LOGS_DIR_PATH env var path if set, else <repo>/logs."""
+    if env_path := os.getenv("COACH_LOGS_DIR_PATH"):
+        return Path(env_path)
+    return Path(__file__).parent.parent.parent / "logs"

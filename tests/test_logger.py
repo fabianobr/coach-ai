@@ -167,11 +167,12 @@ def test_save_with_empty_results(tmp_path):
     assert "Exercises completed | 0" in content
 
 
-def test_save_invalid_day_id_raises(tmp_path):
-    """Invalid day_id should raise ValueError."""
+def test_save_unknown_day_id_succeeds(tmp_path):
+    """Day validation is no longer done at the logger level; D3 should save successfully."""
     logger = SessionLogger(logs_dir=tmp_path)
-    with pytest.raises(ValueError, match="Invalid day_id"):
-        logger.save(day_id="D3", date="2026-05-02")
+    path = logger.save(day_id="D3", date="2026-05-02")
+    assert path.exists()
+    assert "D3" in path.read_text()
 
 
 def test_record_skipped_without_weight_allowed(tmp_path):

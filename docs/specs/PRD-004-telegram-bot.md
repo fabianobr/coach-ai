@@ -1,5 +1,7 @@
 # PRD: Telegram Bot
 
+> **Note:** This spec is superseded by the dynamic program system implemented in feat/dynamic-programs. See `data/programs/` and `src/coach/programs.py` for the current implementation.
+
 ## Problem Statement
 
 The coach currently runs in Claude Code (desktop/web) or as a terminal CLI. Users at the gym want to log workouts on mobile via a messaging interface without setup overhead. Telegram is a platform-agnostic, widely-used messaging app that provides a natural, low-friction interface for real-time workout logging.
