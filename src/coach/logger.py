@@ -201,8 +201,13 @@ class SessionLogger:
         exercise_name: str,
         weight_kg: float | None,
         tonnage_kg: float | None,
+        program_id: str = "",
     ) -> PRType:
-        """Compare against prior logs; return WEIGHT if new weight PR, else NONE."""
+        """Compare against prior logs; return WEIGHT if new weight PR, else NONE.
+
+        When program_id is provided, only logs from that same program are compared.
+        Logs from other programs are skipped to avoid cross-program PR contamination.
+        """
         prior_paths = self.get_prior_log_paths()
         if not prior_paths:
             return PRType.NONE
@@ -212,6 +217,8 @@ class SessionLogger:
             try:
                 content = path.read_text(encoding="utf-8")
             except OSError:
+                continue
+            if program_id and _log_program_id(content) != program_id:
                 continue
             for line in content.splitlines():
                 if "|" not in line:
@@ -246,6 +253,18 @@ class SessionLogger:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _log_program_id(content: str) -> str:
+    """Extract program_id from a log's Session Overview table. Returns '' if not found."""
+    for line in content.splitlines():
+        if "**Program**" in line and "|" in line:
+            parts = [p.strip() for p in line.split("|")]
+            # Row format: | **Program** | <program_id> |
+            # After split: ['', '**Program**', '<program_id>', '']
+            if len(parts) >= 3:
+                return parts[2].strip()
+    return ""
+
 
 def _status_icon(result: ExerciseResult) -> str:
     if result.pr_type == PRType.WEIGHT:

@@ -142,6 +142,77 @@ def test_detect_prs_weight_pr(tmp_path):
     assert result == PRType.WEIGHT
 
 
+def test_detect_prs_same_program_detects_pr(tmp_path):
+    """PR is flagged when prior log is from the same program."""
+    logger = SessionLogger(logs_dir=tmp_path)
+    prior = ExerciseResult(
+        name="Back Squat", sets=5, reps_done=5, weight_kg=100.0,
+        tonnage_kg=5500.0, tut_seconds=None, status=ExerciseStatus.DONE,
+    )
+    logger.record(prior)
+    logger.save(day_id="D1", date="2026-04-25", program_id="prog-a")
+
+    logger2 = SessionLogger(logs_dir=tmp_path)
+    result = logger2.detect_prs("Back Squat", weight_kg=110.0, tonnage_kg=6000.0, program_id="prog-a")
+    assert result == PRType.WEIGHT
+
+
+def test_detect_prs_different_program_ignored(tmp_path):
+    """PR is NOT flagged when prior log is from a different program."""
+    logger = SessionLogger(logs_dir=tmp_path)
+    prior = ExerciseResult(
+        name="Back Squat", sets=5, reps_done=5, weight_kg=100.0,
+        tonnage_kg=5500.0, tut_seconds=None, status=ExerciseStatus.DONE,
+    )
+    logger.record(prior)
+    logger.save(day_id="D1", date="2026-04-25", program_id="prog-a")
+
+    logger2 = SessionLogger(logs_dir=tmp_path)
+    # Same exercise, higher weight, but different program → should NOT flag PR
+    result = logger2.detect_prs("Back Squat", weight_kg=110.0, tonnage_kg=6000.0, program_id="prog-b")
+    assert result == PRType.NONE
+
+
+def test_detect_prs_no_program_id_scans_all_logs(tmp_path):
+    """When program_id is omitted, all prior logs are scanned (backward-compat)."""
+    logger = SessionLogger(logs_dir=tmp_path)
+    prior = ExerciseResult(
+        name="Back Squat", sets=5, reps_done=5, weight_kg=100.0,
+        tonnage_kg=5500.0, tut_seconds=None, status=ExerciseStatus.DONE,
+    )
+    logger.record(prior)
+    logger.save(day_id="D1", date="2026-04-25", program_id="prog-a")
+
+    logger2 = SessionLogger(logs_dir=tmp_path)
+    # No program_id passed → scans all logs regardless of program
+    result = logger2.detect_prs("Back Squat", weight_kg=110.0, tonnage_kg=6000.0)
+    assert result == PRType.WEIGHT
+
+
+def test_detect_prs_mixed_programs_only_matches_own(tmp_path):
+    """With two prior logs from different programs, only own-program log is compared."""
+    # Log from prog-a: squat at 100kg
+    logger_a = SessionLogger(logs_dir=tmp_path)
+    logger_a.record(ExerciseResult(
+        name="Back Squat", sets=5, reps_done=5, weight_kg=100.0,
+        tonnage_kg=5500.0, tut_seconds=None, status=ExerciseStatus.DONE,
+    ))
+    logger_a.save(day_id="D1", date="2026-04-25", program_id="prog-a")
+
+    # Log from prog-b: squat at 120kg (higher than what we'll test)
+    logger_b = SessionLogger(logs_dir=tmp_path)
+    logger_b.record(ExerciseResult(
+        name="Back Squat", sets=5, reps_done=5, weight_kg=120.0,
+        tonnage_kg=7000.0, tut_seconds=None, status=ExerciseStatus.DONE,
+    ))
+    logger_b.save(day_id="D1", date="2026-04-26", program_id="prog-b")
+
+    logger2 = SessionLogger(logs_dir=tmp_path)
+    # 110kg vs prog-a's 100kg → PR (prog-b's 120kg is ignored)
+    result = logger2.detect_prs("Back Squat", weight_kg=110.0, tonnage_kg=6000.0, program_id="prog-a")
+    assert result == PRType.WEIGHT
+
+
 # ---------------------------------------------------------------------------
 # clear()
 # ---------------------------------------------------------------------------
