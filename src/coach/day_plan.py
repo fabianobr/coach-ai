@@ -2,10 +2,6 @@
 
 from typing import Any
 
-from coach.constants import DAY_LABELS
-
-TRAINING_DAYS = ["D1", "D2", "D4", "D5"]
-
 
 def format_weight(exercise: dict[str, Any]) -> str:
     """Format weight display based on exercise type and available fields."""
@@ -179,9 +175,9 @@ def render_trainings_overview(program: dict) -> str:
         ...
     """
     sections = []
-    for day_id in TRAINING_DAYS:
-        label = DAY_LABELS.get(day_id, "")
-        exercises = program.get("days", {}).get(day_id, {}).get("exercises", [])
+    for day_id, day_data in program.get("days", {}).items():
+        label = day_data.get("label", "")
+        exercises = day_data.get("exercises", [])
         lines = [f"<b>{day_id} — {label}</b>"]
         for ex in exercises:
             order = ex.get("order", "?")

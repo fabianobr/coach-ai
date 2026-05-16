@@ -1,20 +1,28 @@
 import asyncio
-import json
 import logging
 import os
+import re
 from datetime import datetime
-from pathlib import Path
 
 from telegram import Update
 from telegram.constants import ChatAction, ParseMode
 from telegram.error import BadRequest
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-from coach.constants import DAY_LABELS
 from coach.day_plan import render_day_plan_formatted_list, render_day_plan_summary, render_trainings_overview
 from coach.llm import Message, get_provider
 from coach.logger import SessionLogger
 from coach.paths import get_resource_path
+from coach.programs import (
+    load_active_program,
+    list_programs,
+    switch_program,
+    clone_program,
+    get_program,
+    ProgramNotFound,
+    ProgramAlreadyExists,
+    InvalidProgramId,
+)
 from coach.telegram.formatting import markdown_to_html
 from coach.telegram.user_sessions import UserSessionStore
 
@@ -40,14 +48,20 @@ class CoachBot:
         self.system_prompt = path.read_text(encoding="utf-8")
 
     def load_program(self) -> None:
-        program_path = Path(__file__).parent.parent.parent.parent / "data" / "program.json"
-        if not program_path.exists():
-            raise FileNotFoundError(f"program.json not found at {program_path}")
-        self.program = json.loads(program_path.read_text(encoding="utf-8"))
+        self.program = load_active_program()
+
+    def _build_system_prompt_with_snapshot(self) -> str:
+        """Append current program snapshot to the system prompt."""
+        if not self.system_prompt or not self.program:
+            return self.system_prompt or ""
+        overview = render_trainings_overview(self.program)
+        plain = re.sub(r'<[^>]+>', '', overview)
+        return self.system_prompt + "\n\n## CURRENT PROGRAM SNAPSHOT\n\n" + plain
 
     async def run(self) -> None:
         self.load_system_prompt()
         self.load_program()
+        self.system_prompt = self._build_system_prompt_with_snapshot()
         self.provider = get_provider()
 
         app = Application.builder().token(self.token).build()
@@ -59,6 +73,8 @@ class CoachBot:
         app.add_handler(CommandHandler("done", self.handle_done))
         app.add_handler(CommandHandler("status", self.handle_status))
         app.add_handler(CommandHandler("help", self.handle_help))
+        app.add_handler(CommandHandler("programs", self.handle_programs))
+        app.add_handler(CommandHandler("program", self.handle_program))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
 
         await app.initialize()
@@ -70,14 +86,20 @@ class CoachBot:
     async def handle_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user_id = update.effective_user.id
         self.store.get_or_create(user_id)
+        valid_days = list(self.program.get("days", {}).keys()) if self.program else []
+        days_str = "/".join(valid_days)
         await update.message.reply_text(
             "Welcome to <b>Coach AI</b>! 🏋️\n\n"
             "Send me a workout message or use:\n"
-            "<code>/day D1</code> — Set training day and start session (D1/D2/D4/D5)\n"
+            f"<code>/day D1</code> — Set training day and start session ({days_str})\n"
             "<code>/trainings</code> — Overview of all training days\n"
             "<code>/training D1</code> — Exercises for a specific day (read-only)\n"
             "<code>/status</code> — See today's exercises\n"
             "<code>/done</code> — End session &amp; save log\n"
+            "<code>/programs</code> — List all training programs\n"
+            "<code>/program show [id]</code> — Show program details\n"
+            "<code>/program switch &lt;id&gt;</code> — Switch active program\n"
+            "<code>/program clone &lt;src&gt; &lt;dst&gt;</code> — Clone a program\n"
             "<code>/help</code> — Show this message",
             parse_mode=ParseMode.HTML
         )
@@ -86,17 +108,21 @@ class CoachBot:
         user_id = update.effective_user.id
         session = self.store.get_or_create(user_id)
 
+        valid_days = list(self.program.get("days", {}).keys()) if self.program else []
+        days_str = "/".join(valid_days) if valid_days else "D1/D2/D4/D5"
+
         if not context.args or len(context.args) == 0:
-            await update.message.reply_text("Usage: <code>/day D1</code> (or D2, D4, D5)", parse_mode=ParseMode.HTML)
+            await update.message.reply_text(f"Usage: <code>/day D1</code> (or {days_str})", parse_mode=ParseMode.HTML)
             return
 
         day_id = context.args[0].upper()
-        if day_id not in ["D1", "D2", "D4", "D5"]:
-            await update.message.reply_text("Invalid day. Use: <code>D1</code>, <code>D2</code>, <code>D4</code>, or <code>D5</code>", parse_mode=ParseMode.HTML)
+        if day_id not in (self.program.get("days", {}) if self.program else {}):
+            valid_codes = ", ".join(f"<code>{d}</code>" for d in valid_days)
+            await update.message.reply_text(f"Invalid day. Use: {valid_codes}", parse_mode=ParseMode.HTML)
             return
 
         session.current_day = day_id
-        day_label = DAY_LABELS.get(day_id, "Unknown")
+        day_label = self.program["days"][day_id]["label"] if self.program and day_id in self.program.get("days", {}) else "Unknown"
 
         # Render Day Plan table with weights and tonnage
         reply_lines = [f"✅ Training day set to <b>{day_id}</b> (<b>{day_label}</b>)"]
@@ -120,6 +146,13 @@ class CoachBot:
         user_id = update.effective_user.id
         session = self.store.get_or_create(user_id)
 
+        if session.current_day is None:
+            await update.message.reply_text(
+                "No training day set. Use <code>/day D1</code> first.",
+                parse_mode=ParseMode.HTML
+            )
+            return
+
         logger_instance = SessionLogger()
         date_str = datetime.now().strftime("%Y-%m-%d")
 
@@ -127,8 +160,11 @@ class CoachBot:
         for exercise in session.exercises:
             logger_instance.record(exercise)
 
+        day_label = self.program["days"].get(session.current_day, {}).get("label", "") if self.program else ""
+        program_id = self.program.get("program_id", "") if self.program else ""
+
         try:
-            await asyncio.to_thread(logger_instance.save, session.current_day, date_str)
+            await asyncio.to_thread(logger_instance.save, session.current_day, date_str, program_id=program_id, day_label=day_label)
             await update.message.reply_text(
                 f"✅ Session complete! Workout saved.\n"
                 f"Great work on <b>{session.current_day}</b>! 💪",
@@ -152,8 +188,13 @@ class CoachBot:
         user_id = update.effective_user.id
         session = self.store.get_or_create(user_id)
 
-        if not self.program or session.current_day not in self.program.get("days", {}):
-            await update.message.reply_text("Unable to load training program", parse_mode=ParseMode.HTML)
+        if not self.program:
+            await update.message.reply_text("Training program not loaded.", parse_mode=ParseMode.HTML)
+            return
+        if session.current_day is None or session.current_day not in self.program.get("days", {}):
+            await update.message.reply_text(
+                "No training day set. Use <code>/day D1</code> first.", parse_mode=ParseMode.HTML
+            )
             return
 
         day_data = self.program["days"][session.current_day]
@@ -300,29 +341,36 @@ class CoachBot:
         await self._safe_reply(update.message, overview)
 
     async def handle_training(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        valid_days = list(self.program.get("days", {}).keys()) if self.program else []
+        rest_days = self.program.get("rest_days", []) if self.program else []
+
         if not context.args:
+            valid_str = ", ".join(f"<code>{d}</code>" for d in valid_days)
             await update.message.reply_text(
-                "Unknown day. Valid options: <code>D1</code>, <code>D2</code>, <code>D4</code>, <code>D5</code>.",
+                f"Unknown day. Valid options: {valid_str}.",
                 parse_mode=ParseMode.HTML,
             )
             return
 
         day_id = context.args[0].upper()
-        if day_id in ("D3", "D6", "D7"):
+
+        if day_id in rest_days:
+            valid_str = ", ".join(valid_days)
             await update.message.reply_text(
-                "D3, D6, and D7 are rest days — no exercises planned. "
-                "Valid training days are D1, D2, D4, and D5.",
+                f"{day_id} is a rest day — no exercises planned. "
+                f"Valid training days are {valid_str}.",
                 parse_mode=ParseMode.HTML,
             )
             return
-        if day_id not in ("D1", "D2", "D4", "D5"):
+        if day_id not in valid_days:
+            valid_str = ", ".join(f"<code>{d}</code>" for d in valid_days)
             await update.message.reply_text(
-                "Unknown day. Valid options: <code>D1</code>, <code>D2</code>, <code>D4</code>, <code>D5</code>.",
+                f"Unknown day. Valid options: {valid_str}.",
                 parse_mode=ParseMode.HTML,
             )
             return
 
-        day_label = DAY_LABELS.get(day_id, "")
+        day_label = self.program["days"][day_id]["label"] if self.program and day_id in self.program.get("days", {}) else ""
         reply_lines = [f"📋 <b>{day_id} — {day_label}</b>"]
 
         if self.program and day_id in self.program.get("days", {}):
@@ -335,6 +383,105 @@ class CoachBot:
                 reply_lines.append(render_day_plan_summary(day_id, total_volume, len(exercises)))
 
         await self._safe_reply(update.message, "\n".join(reply_lines))
+
+    async def handle_programs(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """List all available programs, marking the active one."""
+        programs = list_programs()
+        if not programs:
+            await update.message.reply_text("No programs found in data/programs/.", parse_mode=ParseMode.HTML)
+            return
+        lines = ["<b>Training Programs</b>\n"]
+        for p in programs:
+            marker = "✅ " if p["active"] else "   "
+            lines.append(f"{marker}<b>{p['program_id']}</b> — {p['name']}")
+        await self._safe_reply(update.message, "\n".join(lines))
+
+    async def handle_program(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Dispatch /program subcommands: show, switch, clone."""
+        args = context.args or []
+        if not args:
+            await update.message.reply_text(
+                "Usage:\n"
+                "<code>/program show [id]</code> — Show program details\n"
+                "<code>/program switch &lt;id&gt;</code> — Switch active program\n"
+                "<code>/program clone &lt;src&gt; &lt;dst&gt;</code> — Clone a program",
+                parse_mode=ParseMode.HTML,
+            )
+            return
+
+        subcmd = args[0].lower()
+
+        if subcmd == "show":
+            if len(args) > 1:
+                program_id = args[1]
+            elif self.program:
+                program_id = self.program.get("program_id", "")
+            else:
+                await update.message.reply_text("No active program loaded.", parse_mode=ParseMode.HTML)
+                return
+            try:
+                prog = get_program(program_id) if len(args) > 1 else self.program
+            except ProgramNotFound:
+                await update.message.reply_text(f"Program not found: <code>{program_id}</code>", parse_mode=ParseMode.HTML)
+                return
+            name = prog.get("name", program_id)
+            desc = prog.get("description", "")
+            created = prog.get("created_at", "")
+            days = list(prog.get("days", {}).keys())
+            rest = prog.get("rest_days", [])
+            lines = [
+                f"<b>{name}</b>",
+                f"ID: <code>{program_id}</code>",
+            ]
+            if desc:
+                lines.append(f"Description: {desc}")
+            if created:
+                lines.append(f"Created: {created}")
+            lines.append(f"Training days: {', '.join(days)}")
+            if rest:
+                lines.append(f"Rest days: {', '.join(rest)}")
+            await self._safe_reply(update.message, "\n".join(lines))
+
+        elif subcmd == "switch":
+            if len(args) < 2:
+                await update.message.reply_text("Usage: <code>/program switch &lt;id&gt;</code>", parse_mode=ParseMode.HTML)
+                return
+            program_id = args[1]
+            try:
+                switch_program(program_id)
+                self.program = load_active_program()
+                self.system_prompt = self._build_system_prompt_with_snapshot()
+                await update.message.reply_text(
+                    f"✅ Switched to program <b>{program_id}</b>.",
+                    parse_mode=ParseMode.HTML,
+                )
+            except ProgramNotFound:
+                await update.message.reply_text(f"Program not found: <code>{program_id}</code>", parse_mode=ParseMode.HTML)
+
+        elif subcmd == "clone":
+            if len(args) < 3:
+                await update.message.reply_text("Usage: <code>/program clone &lt;src&gt; &lt;dst&gt;</code>", parse_mode=ParseMode.HTML)
+                return
+            src_id, dst_id = args[1], args[2]
+            try:
+                clone_program(src_id, dst_id)
+                await update.message.reply_text(
+                    f"✅ Cloned <b>{src_id}</b> → <b>{dst_id}</b>.\n"
+                    f"Edit <code>data/programs/{dst_id}.json</code>, then use <code>/program switch {dst_id}</code>.",
+                    parse_mode=ParseMode.HTML,
+                )
+            except ProgramNotFound:
+                await update.message.reply_text(f"Source program not found: <code>{src_id}</code>", parse_mode=ParseMode.HTML)
+            except ProgramAlreadyExists:
+                await update.message.reply_text(f"Program already exists: <code>{dst_id}</code>", parse_mode=ParseMode.HTML)
+            except InvalidProgramId:
+                await update.message.reply_text(
+                    f"Invalid program ID: <code>{dst_id}</code>. Use only lowercase letters, digits, and hyphens.",
+                    parse_mode=ParseMode.HTML,
+                )
+
+        else:
+            await update.message.reply_text(f"Unknown subcommand: <code>{subcmd}</code>. Use show, switch, or clone.", parse_mode=ParseMode.HTML)
 
     async def handle_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await self.handle_start(update, context)

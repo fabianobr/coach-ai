@@ -1,0 +1,58 @@
+{
+  "program_id": "test-program",
+  "name": "Test Program",
+  "description": "Minimal 2-day fixture for tests",
+  "created_at": "2026-01-01",
+  "barbell_weight_kg": 20,
+  "rest_days": ["D3"],
+  "days": {
+    "D1": {
+      "label": "PUSH",
+      "exercises": [
+        {
+          "order": 1,
+          "name": "Bench Press",
+          "type": "barbell",
+          "sets": 5,
+          "reps": 5,
+          "weight_per_side_kg": 30,
+          "total_weight_kg": 80,
+          "isometric": false
+        },
+        {
+          "order": 2,
+          "name": "Weighted Plank",
+          "type": "isometric",
+          "sets": 3,
+          "hold_seconds": 30,
+          "weight_kg": 10,
+          "isometric": true
+        }
+      ]
+    },
+    "D2": {
+      "label": "PULL",
+      "exercises": [
+        {
+          "order": 1,
+          "name": "Barbell Row",
+          "type": "barbell",
+          "sets": 4,
+          "reps": 7,
+          "weight_per_side_kg": 25,
+          "total_weight_kg": 70,
+          "isometric": false
+        },
+        {
+          "order": 2,
+          "name": "Lat Pulldown",
+          "type": "machine",
+          "sets": 3,
+          "reps": 10,
+          "weight_kg": 50,
+          "isometric": false
+        }
+      ]
+    }
+  }
+}

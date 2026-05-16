@@ -447,8 +447,7 @@ LLM_MAX_TOKENS=2048
 | Resource | Location | Purpose |
 |----------|----------|---------|
 | **System Prompt** | `prompts/SYSTEM_PROMPT.md` | Instructions for dual-role coaching + Language Spotter |
-| **Training Program** | `data/program.json` | 4-day Powerbuilding split definition |
-| **Templates** | `templates/*.md` | Output formatting (daily tracking, charts) |
+| **Training Programs** | `data/programs/<id>.json` | Dynamic program definitions (active program loaded at runtime) |
 | **Logs** | `logs/YYYY-MM-DD.md` | Session history and workout records (git-ignored) |
 
 ### 4. Session Management

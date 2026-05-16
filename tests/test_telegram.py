@@ -53,6 +53,8 @@ def test_handle_day_valid():
     store = UserSessionStore()
     session = store.get_or_create(111)
 
+    assert session.current_day is None
+    session.current_day = "D1"
     assert session.current_day == "D1"
     session.current_day = "D2"
     assert session.current_day == "D2"
@@ -581,7 +583,35 @@ async def test_handle_status_program_not_loaded():
 
         update.message.reply_text.assert_awaited_once()
         call_text = update.message.reply_text.await_args.args[0]
-        assert "Unable to load training program" in call_text
+        assert "Training program not loaded." in call_text
+
+
+@pytest.mark.asyncio
+async def test_handle_status_no_day_set():
+    """Test /status when program is loaded but current_day is None."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+        bot.system_prompt = "coach"
+        bot.program = {
+            "days": {"D1": {"label": "Lower Strength", "exercises": []}},
+        }
+
+        update = MagicMock()
+        update.effective_user.id = 556
+        update.message.reply_text = AsyncMock()
+
+        context = MagicMock()
+
+        session = bot.store.get_or_create(556)
+        assert session.current_day is None
+
+        await bot.handle_status(update, context)
+
+        update.message.reply_text.assert_awaited_once()
+        call_text = update.message.reply_text.await_args.args[0]
+        assert "No training day set" in call_text
 
 
 @pytest.mark.asyncio
@@ -670,3 +700,353 @@ async def test_concurrent_users_message_isolation():
 
         # User 1's session should not have user 2's message
         assert not any(m.content == "user 2 message" for m in session1.messages)
+
+
+# ---------------------------------------------------------------------------
+# handle_programs tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_handle_programs_lists_programs():
+    """handle_programs renders a list with the active program marked."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+        bot.system_prompt = "coach"
+
+        update = MagicMock()
+        update.message.reply_text = AsyncMock()
+        context = MagicMock()
+
+        programs_data = [
+            {"program_id": "prog-a", "name": "Program A", "active": True},
+            {"program_id": "prog-b", "name": "Program B", "active": False},
+        ]
+
+        with patch("src.coach.telegram.bot.list_programs", return_value=programs_data):
+            await bot.handle_programs(update, context)
+
+        call_text = update.message.reply_text.await_args.args[0]
+        assert "prog-a" in call_text
+        assert "prog-b" in call_text
+        assert "✅" in call_text
+
+
+@pytest.mark.asyncio
+async def test_handle_programs_empty():
+    """handle_programs shows an error when no programs exist."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+        bot.system_prompt = "coach"
+
+        update = MagicMock()
+        update.message.reply_text = AsyncMock()
+        context = MagicMock()
+
+        with patch("src.coach.telegram.bot.list_programs", return_value=[]):
+            await bot.handle_programs(update, context)
+
+        update.message.reply_text.assert_awaited_once()
+        call_text = update.message.reply_text.await_args.args[0]
+        assert "No programs found" in call_text
+
+
+# ---------------------------------------------------------------------------
+# handle_program subcommand tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_handle_program_no_args_shows_usage():
+    """handle_program with no args shows subcommand usage."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+        update = MagicMock()
+        update.message.reply_text = AsyncMock()
+        context = MagicMock()
+        context.args = []
+
+        await bot.handle_program(update, context)
+
+        call_text = update.message.reply_text.await_args.args[0]
+        assert "Usage:" in call_text
+        assert "show" in call_text
+        assert "switch" in call_text
+        assert "clone" in call_text
+
+
+@pytest.mark.asyncio
+async def test_handle_program_show_active():
+    """handle_program show (no id arg) shows the currently loaded program."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+        bot.system_prompt = "coach"
+        bot.program = {
+            "program_id": "prog-a",
+            "name": "Program A",
+            "description": "Test desc",
+            "created_at": "2026-01-01",
+            "days": {"D1": {}, "D2": {}},
+            "rest_days": ["D3"],
+        }
+
+        update = MagicMock()
+        update.message.reply_text = AsyncMock()
+        context = MagicMock()
+        context.args = ["show"]
+
+        await bot.handle_program(update, context)
+
+        call_text = update.message.reply_text.await_args.args[0]
+        assert "Program A" in call_text
+        assert "prog-a" in call_text
+        assert "D1" in call_text
+
+
+@pytest.mark.asyncio
+async def test_handle_program_show_by_id():
+    """handle_program show <id> fetches and displays a specific program."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+        bot.system_prompt = "coach"
+        bot.program = {"program_id": "active-prog", "name": "Active", "days": {}}
+
+        fetched = {
+            "program_id": "other-prog",
+            "name": "Other Program",
+            "days": {"PUSH": {}, "PULL": {}},
+        }
+
+        update = MagicMock()
+        update.message.reply_text = AsyncMock()
+        context = MagicMock()
+        context.args = ["show", "other-prog"]
+
+        with patch("src.coach.telegram.bot.get_program", return_value=fetched):
+            await bot.handle_program(update, context)
+
+        call_text = update.message.reply_text.await_args.args[0]
+        assert "Other Program" in call_text
+        assert "PUSH" in call_text
+
+
+@pytest.mark.asyncio
+async def test_handle_program_show_not_found():
+    """handle_program show <id> when id doesn't exist shows error."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        import src.coach.telegram.bot as bot_module
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+        bot.system_prompt = "coach"
+        bot.program = {"program_id": "active", "name": "Active", "days": {}}
+
+        update = MagicMock()
+        update.message.reply_text = AsyncMock()
+        context = MagicMock()
+        context.args = ["show", "nonexistent"]
+
+        # Use the ProgramNotFound already bound in bot_module to avoid dual-path identity mismatch
+        with patch("src.coach.telegram.bot.get_program", side_effect=bot_module.ProgramNotFound("not found")):
+            await bot.handle_program(update, context)
+
+        call_text = update.message.reply_text.await_args.args[0]
+        assert "not found" in call_text.lower()
+
+
+@pytest.mark.asyncio
+async def test_handle_program_switch_success():
+    """handle_program switch <id> updates self.program and confirms."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+        bot.system_prompt = "coach"
+        bot.program = {"program_id": "old-prog", "name": "Old", "days": {"D1": {}}}
+
+        new_program = {"program_id": "new-prog", "name": "New", "days": {"A": {}, "B": {}}}
+
+        update = MagicMock()
+        update.message.reply_text = AsyncMock()
+        context = MagicMock()
+        context.args = ["switch", "new-prog"]
+
+        with patch("src.coach.telegram.bot.switch_program"), \
+             patch("src.coach.telegram.bot.load_active_program", return_value=new_program):
+            await bot.handle_program(update, context)
+
+        assert bot.program == new_program
+        call_text = update.message.reply_text.await_args.args[0]
+        assert "new-prog" in call_text
+        assert "✅" in call_text
+
+
+@pytest.mark.asyncio
+async def test_handle_program_switch_not_found():
+    """handle_program switch <id> when id doesn't exist shows error."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        import src.coach.telegram.bot as bot_module
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+        bot.system_prompt = "coach"
+        bot.program = {"program_id": "active", "name": "Active", "days": {}}
+
+        update = MagicMock()
+        update.message.reply_text = AsyncMock()
+        context = MagicMock()
+        context.args = ["switch", "ghost-prog"]
+
+        with patch("src.coach.telegram.bot.switch_program", side_effect=bot_module.ProgramNotFound("not found")):
+            await bot.handle_program(update, context)
+
+        call_text = update.message.reply_text.await_args.args[0]
+        assert "not found" in call_text.lower()
+
+
+@pytest.mark.asyncio
+async def test_handle_program_switch_missing_id():
+    """handle_program switch with no id arg shows usage."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+        update = MagicMock()
+        update.message.reply_text = AsyncMock()
+        context = MagicMock()
+        context.args = ["switch"]
+
+        await bot.handle_program(update, context)
+
+        call_text = update.message.reply_text.await_args.args[0]
+        assert "Usage:" in call_text
+
+
+@pytest.mark.asyncio
+async def test_handle_program_clone_success():
+    """handle_program clone <src> <dst> clones a program and confirms."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        from src.coach.telegram.bot import CoachBot
+        from pathlib import Path
+
+        bot = CoachBot()
+        bot.system_prompt = "coach"
+
+        update = MagicMock()
+        update.message.reply_text = AsyncMock()
+        context = MagicMock()
+        context.args = ["clone", "prog-a", "prog-b"]
+
+        with patch("src.coach.telegram.bot.clone_program", return_value=Path("/data/programs/prog-b.json")):
+            await bot.handle_program(update, context)
+
+        call_text = update.message.reply_text.await_args.args[0]
+        assert "prog-a" in call_text
+        assert "prog-b" in call_text
+        assert "✅" in call_text
+
+
+@pytest.mark.asyncio
+async def test_handle_program_clone_src_not_found():
+    """handle_program clone shows error when source doesn't exist."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        import src.coach.telegram.bot as bot_module
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+        update = MagicMock()
+        update.message.reply_text = AsyncMock()
+        context = MagicMock()
+        context.args = ["clone", "ghost", "new-prog"]
+
+        with patch("src.coach.telegram.bot.clone_program", side_effect=bot_module.ProgramNotFound("not found")):
+            await bot.handle_program(update, context)
+
+        call_text = update.message.reply_text.await_args.args[0]
+        assert "not found" in call_text.lower()
+
+
+@pytest.mark.asyncio
+async def test_handle_program_clone_dst_already_exists():
+    """handle_program clone shows error when destination already exists."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        import src.coach.telegram.bot as bot_module
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+        update = MagicMock()
+        update.message.reply_text = AsyncMock()
+        context = MagicMock()
+        context.args = ["clone", "prog-a", "prog-b"]
+
+        with patch("src.coach.telegram.bot.clone_program", side_effect=bot_module.ProgramAlreadyExists("exists")):
+            await bot.handle_program(update, context)
+
+        call_text = update.message.reply_text.await_args.args[0]
+        assert "already exists" in call_text.lower()
+
+
+@pytest.mark.asyncio
+async def test_handle_program_clone_invalid_dst_id():
+    """handle_program clone shows error when destination id is invalid."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        import src.coach.telegram.bot as bot_module
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+        update = MagicMock()
+        update.message.reply_text = AsyncMock()
+        context = MagicMock()
+        context.args = ["clone", "prog-a", "INVALID_ID"]
+
+        with patch("src.coach.telegram.bot.clone_program", side_effect=bot_module.InvalidProgramId("invalid")):
+            await bot.handle_program(update, context)
+
+        call_text = update.message.reply_text.await_args.args[0]
+        assert "Invalid program ID" in call_text
+
+
+@pytest.mark.asyncio
+async def test_handle_program_clone_missing_args():
+    """handle_program clone with missing dst arg shows usage."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+        update = MagicMock()
+        update.message.reply_text = AsyncMock()
+        context = MagicMock()
+        context.args = ["clone", "prog-a"]
+
+        await bot.handle_program(update, context)
+
+        call_text = update.message.reply_text.await_args.args[0]
+        assert "Usage:" in call_text
+
+
+@pytest.mark.asyncio
+async def test_handle_program_unknown_subcommand():
+    """handle_program with unknown subcommand shows error."""
+    with patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "test_token"}):
+        from src.coach.telegram.bot import CoachBot
+
+        bot = CoachBot()
+        update = MagicMock()
+        update.message.reply_text = AsyncMock()
+        context = MagicMock()
+        context.args = ["frobnicate"]
+
+        await bot.handle_program(update, context)
+
+        call_text = update.message.reply_text.await_args.args[0]
+        assert "Unknown subcommand" in call_text
