@@ -10,7 +10,6 @@ from telegram.constants import ChatAction, ParseMode
 from telegram.error import BadRequest
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-from coach.constants import DAY_LABELS
 from coach.day_plan import render_day_plan_formatted_list, render_day_plan_summary, render_trainings_overview
 from coach.llm import Message, get_provider
 from coach.logger import SessionLogger
@@ -96,7 +95,7 @@ class CoachBot:
             return
 
         session.current_day = day_id
-        day_label = DAY_LABELS.get(day_id, "Unknown")
+        day_label = self.program["days"][day_id]["label"] if self.program and day_id in self.program.get("days", {}) else "Unknown"
 
         # Render Day Plan table with weights and tonnage
         reply_lines = [f"✅ Training day set to <b>{day_id}</b> (<b>{day_label}</b>)"]
@@ -322,7 +321,7 @@ class CoachBot:
             )
             return
 
-        day_label = DAY_LABELS.get(day_id, "")
+        day_label = self.program["days"][day_id]["label"] if self.program and day_id in self.program.get("days", {}) else ""
         reply_lines = [f"📋 <b>{day_id} — {day_label}</b>"]
 
         if self.program and day_id in self.program.get("days", {}):
