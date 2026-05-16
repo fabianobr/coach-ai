@@ -7,13 +7,22 @@ import pytest
 
 from src.coach.llm.base import Message
 
+_FAKE_PROGRAM = {
+    "program_id": "test-prog",
+    "name": "Test Program",
+    "barbell_weight_kg": 20,
+    "days": {"D1": {"label": "PUSH", "exercises": []}},
+    "rest_days": [],
+}
+
 
 def make_cli(system_prompt_content="# System Prompt"):
-    """Return a CoachCLI with a mocked system prompt file and provider."""
+    """Return a CoachCLI with a mocked system prompt file, program, and provider."""
     mock_provider = MagicMock()
     mock_provider.stream.return_value = iter(["Hello", " world"])
 
     with patch("src.coach.cli.get_provider", return_value=mock_provider), \
+         patch("src.coach.cli.load_active_program", return_value=_FAKE_PROGRAM), \
          patch.object(Path, "exists", return_value=True), \
          patch.object(Path, "read_text", return_value=system_prompt_content):
         from src.coach.cli import CoachCLI
@@ -93,10 +102,42 @@ def test_provider_initialization_error():
     """Provider init error should propagate."""
     from src.coach.cli import CoachCLI
 
-    with patch("src.coach.cli.get_provider", side_effect=Exception("Invalid API key")):
-        with patch.object(Path, "exists", return_value=True), \
-             patch.object(Path, "read_text", return_value="# System Prompt"):
-            cli = CoachCLI()
-            with pytest.raises(SystemExit) as exc_info:
-                cli.run()
-            assert exc_info.value.code == 1
+    with patch("src.coach.cli.get_provider", side_effect=Exception("Invalid API key")), \
+         patch("src.coach.cli.load_active_program", return_value=_FAKE_PROGRAM), \
+         patch.object(Path, "exists", return_value=True), \
+         patch.object(Path, "read_text", return_value="# System Prompt"):
+        cli = CoachCLI()
+        with pytest.raises(SystemExit) as exc_info:
+            cli.run()
+        assert exc_info.value.code == 1
+
+
+def test_snapshot_appended_to_system_prompt():
+    """run() must append ## CURRENT PROGRAM SNAPSHOT to the system prompt."""
+    from src.coach.cli import CoachCLI
+
+    with patch("src.coach.cli.load_active_program", return_value=_FAKE_PROGRAM), \
+         patch("src.coach.cli.get_provider", return_value=MagicMock()), \
+         patch.object(Path, "exists", return_value=True), \
+         patch.object(Path, "read_text", return_value="# Base Prompt"), \
+         patch("builtins.input", side_effect=EOFError):
+        cli = CoachCLI()
+        cli.run()
+
+    assert "## CURRENT PROGRAM SNAPSHOT" in cli.system_prompt
+    assert "Test Program" not in cli.system_prompt  # name not in overview
+    assert "D1" in cli.system_prompt
+
+
+def test_missing_active_program_exits():
+    """run() must exit with code 1 when active.txt is missing."""
+    import src.coach.cli as cli_module
+    from src.coach.cli import CoachCLI
+
+    with patch("src.coach.cli.load_active_program", side_effect=cli_module.ActiveProgramNotConfigured("no active")), \
+         patch.object(Path, "exists", return_value=True), \
+         patch.object(Path, "read_text", return_value="# Base Prompt"):
+        cli = CoachCLI()
+        with pytest.raises(SystemExit) as exc_info:
+            cli.run()
+        assert exc_info.value.code == 1
