@@ -124,7 +124,7 @@ Tests import via `from src.coach.llm... import ...` (e.g. `tests/test_llm_provid
 
 ## Next Steps (In Development)
 
-- **CLI slash commands** — `/day`, `/programs`, `/program switch` etc. are only wired in the Telegram bot. A thin command dispatcher in `cli.py` would make the CLI a full-featured alternative to Telegram.
+No outstanding items. All planned features are complete.
 
 ## Dev Notes
 
