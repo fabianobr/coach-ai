@@ -86,7 +86,7 @@ class CoachBot:
     async def handle_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user_id = update.effective_user.id
         self.store.get_or_create(user_id)
-        valid_days = list(self.program.get("days", {}).keys()) if self.program else ["D1", "D2", "D4", "D5"]
+        valid_days = list(self.program.get("days", {}).keys()) if self.program else []
         days_str = "/".join(valid_days)
         await update.message.reply_text(
             "Welcome to <b>Coach AI</b>! 🏋️\n\n"
@@ -188,8 +188,13 @@ class CoachBot:
         user_id = update.effective_user.id
         session = self.store.get_or_create(user_id)
 
-        if not self.program or session.current_day not in self.program.get("days", {}):
-            await update.message.reply_text("Unable to load training program", parse_mode=ParseMode.HTML)
+        if not self.program:
+            await update.message.reply_text("Training program not loaded.", parse_mode=ParseMode.HTML)
+            return
+        if session.current_day is None or session.current_day not in self.program.get("days", {}):
+            await update.message.reply_text(
+                "No training day set. Use <code>/day D1</code> first.", parse_mode=ParseMode.HTML
+            )
             return
 
         day_data = self.program["days"][session.current_day]
