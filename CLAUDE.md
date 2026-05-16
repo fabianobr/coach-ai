@@ -124,7 +124,6 @@ Tests import via `from src.coach.llm... import ...` (e.g. `tests/test_llm_provid
 
 ## Next Steps (In Development)
 
-- **PR detection cross-program** — `logger.detect_prs()` scans all prior logs regardless of program. Filter by `program_id` (already written to the Session Overview table) to avoid flagging a weight PR that belongs to a different program.
 - **CLI slash commands** — `/day`, `/programs`, `/program switch` etc. are only wired in the Telegram bot. A thin command dispatcher in `cli.py` would make the CLI a full-featured alternative to Telegram.
 
 ## Dev Notes
