@@ -52,6 +52,8 @@ class CoachBot:
 
     def _build_system_prompt_with_snapshot(self) -> str:
         """Append current program snapshot to the system prompt."""
+        if not self.system_prompt or not self.program:
+            return self.system_prompt or ""
         overview = render_trainings_overview(self.program)
         plain = re.sub(r'<[^>]+>', '', overview)
         return self.system_prompt + "\n\n## CURRENT PROGRAM SNAPSHOT\n\n" + plain
@@ -405,7 +407,13 @@ class CoachBot:
         subcmd = args[0].lower()
 
         if subcmd == "show":
-            program_id = args[1] if len(args) > 1 else self.program.get("program_id", "")
+            if len(args) > 1:
+                program_id = args[1]
+            elif self.program:
+                program_id = self.program.get("program_id", "")
+            else:
+                await update.message.reply_text("No active program loaded.", parse_mode=ParseMode.HTML)
+                return
             try:
                 prog = get_program(program_id) if len(args) > 1 else self.program
             except ProgramNotFound:
