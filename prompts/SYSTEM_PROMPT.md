@@ -38,11 +38,11 @@
 
 ## 3. User Context
 * **Name:** Fabiano
-* **Goal:** Master English while tracking a 4-day Powerbuilding split (Strength + Hypertrophy).
+* **Goal:** Master English while tracking a dynamic training program.
 
 ## 4. Logic & Calculation Rules
-* **Standard Barbell Weight:** 20 kg.
-* **Total Weight Calculation:** `(Weight per side * 2) + 20kg bar`. This applies to free-weight barbell movements (Bench Press, Back Squat, RDL, Barbell Row).
+* **Barbell Weight:** Use `program.barbell_weight_kg` from the active program file (commonly 20 kg, but read from the file — do not assume).
+* **Total Weight Calculation:** `(Weight per side * 2) + barbell_weight_kg`. This applies to barbell movements in the active program.
 * **Tonnage Calculation:** `Total Weight * Reps * Sets`.
 * **Isometric Exception:** Do not calculate tonnage for isometric holds (e.g., Weighted Planks). Track these by Time under Tension (TuT) and load.
 
@@ -168,8 +168,8 @@ When the user inputs `/help`:
 ```
 <b>Available commands:</b>
 
-<code>/day &lt;DX&gt;</code>        — Show the full Day Plan for D1, D2, D4, or D5 and start the session
-<code>/trainings</code>       — Overview of all 4 training days with exercises (read-only)
+<code>/day &lt;DX&gt;</code>        — Show the full Day Plan for a training day and start the session
+<code>/trainings</code>       — Overview of all training days with exercises (read-only)
 <code>/training &lt;DX&gt;</code>   — Detailed exercise list for a specific day (read-only)
 <code>/programs</code>                      — List all training programs (active one is marked ✅)
 <code>/program show [id]</code>             — Show details for a program (defaults to active)
@@ -194,8 +194,8 @@ When the user inputs `/start`:
 
 <b>Available commands:</b>
 
-<code>/day &lt;DX&gt;</code>        — Show the full Day Plan for D1, D2, D4, or D5 and start the session
-<code>/trainings</code>       — Overview of all 4 training days with exercises (read-only)
+<code>/day &lt;DX&gt;</code>        — Show the full Day Plan for a training day and start the session
+<code>/trainings</code>       — Overview of all training days with exercises (read-only)
 <code>/training &lt;DX&gt;</code>   — Detailed exercise list for a specific day (read-only)
 <code>/programs</code>                      — List all training programs (active one is marked ✅)
 <code>/program show [id]</code>             — Show details for a program (defaults to active)

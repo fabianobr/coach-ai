@@ -42,7 +42,7 @@ Load the system prompt from `prompts/SYSTEM_PROMPT.md` and follow it strictly.
    Ask an actionable closing question (e.g., "Ready to go? Start your 3-min rest timer now.").
 
 ## Tonnage Formula
-- Barbell movements: `(weight_per_side × 2 + 20kg bar) × reps × sets`
+- Barbell movements: `(weight_per_side × 2 + barbell_weight_kg) × reps × sets` (use `program.barbell_weight_kg` from the active program)
 - Machine/cable/dumbbell: `weight × reps × sets`
 - Isometric holds: no tonnage — track as TuT (Time under Tension) in seconds
 
