@@ -7,6 +7,8 @@ import tempfile
 from datetime import date
 from pathlib import Path
 
+from coach.paths import get_programs_dir
+
 
 class ProgramNotFound(FileNotFoundError):
     """Raised when a program JSON file cannot be found."""
@@ -25,13 +27,6 @@ class InvalidProgramId(ValueError):
 
 
 _PROGRAM_ID_PATTERN = re.compile(r"^[a-z0-9-]+$")
-
-
-def get_programs_dir() -> Path:
-    """Returns COACH_PROGRAMS_DIR_PATH env var if set, else <repo_root>/data/programs."""
-    if env_path := os.getenv("COACH_PROGRAMS_DIR_PATH"):
-        return Path(env_path)
-    return Path(__file__).parent.parent.parent / "data" / "programs"
 
 
 def load_active_program() -> dict:
