@@ -253,7 +253,7 @@ ExerciseResult("Weighted Plank",sets=3, reps_done=None,weight_kg=None, tonnage_k
 | `provider.stream()` | `bot.provider.stream.return_value = iter([RESPONSE_HTML])` | Reassigned per step |
 | `SessionLogger` | `patch("src.coach.telegram.bot.SessionLogger")` | Patch at import site in bot module |
 | `telegram.Update` | `MagicMock()` with `AsyncMock` on reply methods | Telegram SDK not available in tests |
-| `data/program.json` | Loaded from disk via `Path(__file__).parent.parent / "data/program.json"` | Real data, no mock needed |
+| `data/programs/` | Loaded from disk via `Path(__file__).parent.parent / "data/programs/<id>.json"` | Real data, no mock needed |
 
 ---
 
