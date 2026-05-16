@@ -9,7 +9,6 @@ error checking and resource path setup.
 import asyncio
 import os
 import sys
-import subprocess
 from pathlib import Path
 
 
@@ -78,15 +77,20 @@ def verify_system_prompt(project_root: Path) -> None:
     log_success(f"SYSTEM_PROMPT.md found at {system_prompt_path}")
 
 
-def verify_program_json(project_root: Path) -> None:
-    """Verify program.json exists."""
-    program_path = project_root / "data" / "program.json"
-
-    if not program_path.exists():
-        log_error(f"program.json not found at {program_path}")
+def verify_program_files(project_root: Path) -> None:
+    """Verify active.txt and the referenced program JSON exist."""
+    active_path = project_root / "data" / "programs" / "active.txt"
+    if not active_path.exists():
+        log_error(f"active.txt not found at {active_path}")
         sys.exit(1)
 
-    log_success(f"program.json found at {program_path}")
+    program_id = active_path.read_text(encoding="utf-8").strip()
+    program_path = project_root / "data" / "programs" / f"{program_id}.json"
+    if not program_path.exists():
+        log_error(f"Active program file not found: {program_path}")
+        sys.exit(1)
+
+    log_success(f"Active program: {program_id}")
 
 
 def verify_ollama(base_url: str) -> None:
@@ -111,7 +115,7 @@ def verify_ollama(base_url: str) -> None:
                 return
         except urllib.error.URLError:
             pass
-    except Exception as e:
+    except Exception:
         pass
 
     log_error(f"Ollama is not running at {base_url}")
@@ -178,7 +182,7 @@ def main() -> None:
     verify_env_file(project_root)
     verify_required_env()
     verify_system_prompt(project_root)
-    verify_program_json(project_root)
+    verify_program_files(project_root)
 
     # Check LLM provider
     base_url = os.getenv("LLM_BASE_URL", "http://localhost:11434/v1")
