@@ -17,7 +17,7 @@ from src.coach.telegram.formatting import markdown_to_html
 
 def load_program():
     """Load the training program from data/program.json."""
-    program_path = Path(__file__).parent.parent / "data" / "program.json"
+    program_path = Path(__file__).parent.parent / "data" / "programs" / "powerbuilding-4d.json"
     with open(program_path) as f:
         return json.load(f)
 
@@ -146,7 +146,7 @@ class TestHandleDayMessageFormatting:
 
             bot = CoachBot()
             bot.system_prompt = "coach"
-            program_path = Path(__file__).parent.parent / "data" / "program.json"
+            program_path = Path(__file__).parent.parent / "data" / "programs" / "powerbuilding-4d.json"
             bot.program = json.loads(program_path.read_text())
 
             update = MagicMock()
@@ -178,7 +178,7 @@ class TestHandleDayMessageFormatting:
 
             bot = CoachBot()
             bot.system_prompt = "coach"
-            program_path = Path(__file__).parent.parent / "data" / "program.json"
+            program_path = Path(__file__).parent.parent / "data" / "programs" / "powerbuilding-4d.json"
             bot.program = json.loads(program_path.read_text())
 
             update = MagicMock()
@@ -210,7 +210,7 @@ class TestHandleDayMessageFormatting:
 
             bot = CoachBot()
             bot.system_prompt = "coach"
-            program_path = Path(__file__).parent.parent / "data" / "program.json"
+            program_path = Path(__file__).parent.parent / "data" / "programs" / "powerbuilding-4d.json"
             bot.program = json.loads(program_path.read_text())
 
             update = MagicMock()
@@ -245,7 +245,7 @@ class TestHandleStatusMessageFormatting:
 
             bot = CoachBot()
             bot.system_prompt = "coach"
-            program_path = Path(__file__).parent.parent / "data" / "program.json"
+            program_path = Path(__file__).parent.parent / "data" / "programs" / "powerbuilding-4d.json"
             bot.program = json.loads(program_path.read_text())
 
             update = MagicMock()
@@ -281,7 +281,7 @@ class TestMessageParseMode:
 
             bot = CoachBot()
             bot.system_prompt = "coach"
-            program_path = Path(__file__).parent.parent / "data" / "program.json"
+            program_path = Path(__file__).parent.parent / "data" / "programs" / "powerbuilding-4d.json"
             bot.program = json.loads(program_path.read_text())
 
             update = MagicMock()

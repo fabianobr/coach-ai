@@ -106,7 +106,7 @@ def d1_bot():
 
         bot = CoachBot()
         bot.system_prompt = "You are a fitness coach. Reply in HTML."
-        program_path = Path(__file__).parent.parent / "data" / "program.json"
+        program_path = Path(__file__).parent.parent / "data" / "programs" / "powerbuilding-4d.json"
         bot.program = json.loads(program_path.read_text())
         bot.provider = MagicMock()
         return bot
