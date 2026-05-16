@@ -4,6 +4,17 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+_FAKE_PROGRAM = {
+    "program_id": "test-prog",
+    "name": "Test Program",
+    "barbell_weight_kg": 20,
+    "days": {
+        "D1": {"label": "PUSH", "exercises": []},
+        "D2": {"label": "PULL", "exercises": []},
+    },
+    "rest_days": ["D3"],
+}
+
 
 def _make_mock_provider(chunks=None):
     mock_provider = MagicMock()
@@ -28,7 +39,6 @@ def api_client():
     mock_provider = _make_mock_provider()
     mock_config = _make_mock_config()
 
-    # Import the module fresh inside the patch context so lifespan picks up mocks
     import importlib
     import src.coach.api.app as api_app_module
     importlib.reload(api_app_module)
@@ -36,6 +46,7 @@ def api_client():
     with (
         patch.object(api_app_module, "get_provider", return_value=mock_provider),
         patch.object(api_app_module, "config_from_env", return_value=mock_config),
+        patch.object(api_app_module, "load_active_program", return_value=_FAKE_PROGRAM),
         patch.object(Path, "exists", return_value=True),
         patch.object(Path, "read_text", return_value="# System Prompt"),
     ):
@@ -178,3 +189,147 @@ def test_message_length_cap_enforced(api_client):
 
     resp = client.post("/chat", json={"session_id": "s", "message": huge_message})
     assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Integration: program snapshot injected into system prompt at startup
+# ---------------------------------------------------------------------------
+
+def test_system_prompt_contains_program_snapshot(api_client):
+    """Lifespan must inject ## CURRENT PROGRAM SNAPSHOT into the system prompt."""
+    client, mock_provider = api_client
+    mock_provider.chat.return_value = "ok"
+
+    client.post("/chat", json={"session_id": "snap", "message": "hello"})
+
+    system_prompt_used = mock_provider.chat.call_args.kwargs.get("system", "")
+    assert "## CURRENT PROGRAM SNAPSHOT" in system_prompt_used
+    assert "D1" in system_prompt_used
+    assert "D2" in system_prompt_used
+
+
+def test_system_prompt_snapshot_consistent_across_requests(api_client):
+    """Every request in the same process must use the same system prompt."""
+    client, mock_provider = api_client
+    mock_provider.chat.side_effect = ["resp1", "resp2", "resp3"]
+
+    for i in range(3):
+        client.post("/chat", json={"session_id": f"s{i}", "message": "hi"})
+
+    prompts = [call.kwargs.get("system", "") for call in mock_provider.chat.call_args_list]
+    assert len(set(prompts)) == 1, "All requests must use the same system prompt"
+
+
+def test_app_state_program_set_at_startup(api_client):
+    """app.state.program must be populated with the loaded program dict."""
+    client, _ = api_client
+    resp = client.get("/health")
+    assert resp.status_code == 200
+    # Access app state directly via the test client's app
+    import src.coach.api.app as api_app_module
+    assert api_app_module.app.state.program == _FAKE_PROGRAM
+
+
+# ---------------------------------------------------------------------------
+# Integration: CLI REPL loop sequences
+# ---------------------------------------------------------------------------
+
+def test_cli_repl_day_then_status_sequence(capsys):
+    """Full CLI sequence: /day D1 → /status shows the same day."""
+    from pathlib import Path
+    from src.coach.cli import CoachCLI
+
+    with patch("src.coach.cli.load_active_program", return_value=_FAKE_PROGRAM), \
+         patch("src.coach.cli.get_provider", return_value=MagicMock()), \
+         patch.object(Path, "exists", return_value=True), \
+         patch.object(Path, "read_text", return_value="# Base"):
+        cli = CoachCLI()
+        cli.program = _FAKE_PROGRAM
+        cli.system_prompt = "# Base"
+
+    cli._handle_input("/day D1")
+    assert cli.current_day == "D1"
+
+    cli._handle_input("/status")
+    out = capsys.readouterr().out
+    assert "D1" in out
+    assert "PUSH" in out
+
+
+def test_cli_repl_done_clears_day(capsys):
+    """/done after /day D1 must clear current_day and save the log."""
+    from pathlib import Path
+    from src.coach.cli import CoachCLI
+
+    with patch("src.coach.cli.load_active_program", return_value=_FAKE_PROGRAM), \
+         patch("src.coach.cli.get_provider", return_value=MagicMock()), \
+         patch.object(Path, "exists", return_value=True), \
+         patch.object(Path, "read_text", return_value="# Base"):
+        cli = CoachCLI()
+        cli.program = _FAKE_PROGRAM
+        cli.system_prompt = "# Base"
+
+    cli._handle_input("/day D1")
+    assert cli.current_day == "D1"
+
+    with patch("src.coach.cli.SessionLogger") as MockLogger:
+        mock_logger = MagicMock()
+        MockLogger.return_value = mock_logger
+        cli._handle_input("/done")
+
+    assert cli.current_day is None
+    mock_logger.save.assert_called_once()
+
+
+def test_cli_repl_program_switch_updates_snapshot(capsys):
+    """/program switch must reload self.program and rebuild system_prompt snapshot."""
+    from pathlib import Path
+    from src.coach.cli import CoachCLI
+
+    with patch("src.coach.cli.load_active_program", return_value=_FAKE_PROGRAM), \
+         patch("src.coach.cli.get_provider", return_value=MagicMock()), \
+         patch.object(Path, "exists", return_value=True), \
+         patch.object(Path, "read_text", return_value="# Base"):
+        cli = CoachCLI()
+        cli.program = _FAKE_PROGRAM
+        cli.system_prompt = "# Base\n\n## CURRENT PROGRAM SNAPSHOT\n\nD1 — PUSH"
+
+    new_program = {**_FAKE_PROGRAM, "program_id": "new-prog", "name": "New",
+                   "days": {"A": {"label": "LEGS", "exercises": []}}}
+
+    with patch("src.coach.cli.switch_program"), \
+         patch("src.coach.cli.load_active_program", return_value=new_program):
+        cli._handle_input("/program switch new-prog")
+
+    assert cli.program == new_program
+    assert "## CURRENT PROGRAM SNAPSHOT" in cli.system_prompt
+    # Old snapshot should not appear anymore
+    assert "D1 — PUSH" not in cli.system_prompt
+
+
+def test_cli_repl_full_run_loop(capsys):
+    """run() processes multiple commands in sequence before EOF."""
+    from pathlib import Path
+    from unittest.mock import call
+    from src.coach.cli import CoachCLI
+
+    mock_provider = MagicMock()
+    mock_provider.stream.return_value = iter(["coach response"])
+
+    inputs = iter(["/day D1", "/status", "/quit"])
+
+    with patch("src.coach.cli.load_active_program", return_value=_FAKE_PROGRAM), \
+         patch("src.coach.cli.get_provider", return_value=mock_provider), \
+         patch.object(Path, "exists", return_value=True), \
+         patch.object(Path, "read_text", return_value="# Base"), \
+         patch("builtins.input", side_effect=inputs):
+        cli = CoachCLI()
+        cli.run()
+
+    out = capsys.readouterr().out
+    # Startup banner
+    assert "Test Program" in out
+    # /day D1 output
+    assert "D1" in out
+    # /status output (set by /day D1 above)
+    assert "PUSH" in out
