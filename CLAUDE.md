@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 **coach-ai** is a dual-role virtual coach that:
-1. **Tracks gym workouts** — 4-day Powerbuilding split (D1/D2/D4/D5), tonnage calculation, progressive overload, PR detection
+1. **Tracks gym workouts** — dynamic training programs (configurable days), tonnage calculation, progressive overload, PR detection
 2. **Corrects English** — every interaction starts with a "Language Spotter" block fixing the user's grammar/vocabulary
 
 The full AI behavior is defined in `prompts/SYSTEM_PROMPT.md`. The Claude Code skill is in `.claude/skills/coach/SKILL.md`.
@@ -41,7 +41,7 @@ ruff format src/ tests/
 
 coach-ai runs in **two independent runtimes**:
 
-1. **Claude Code skill (current user entry point)** — `.claude/skills/coach/SKILL.md` loads `prompts/SYSTEM_PROMPT.md`, `data/program.json`, and `templates/*.md` to deliver the full dual-role coaching experience directly inside Claude Code.
+1. **Claude Code skill (current user entry point)** — `.claude/skills/coach/SKILL.md` loads `prompts/SYSTEM_PROMPT.md` and the active program from `data/programs/` to deliver the full dual-role coaching experience directly inside Claude Code.
 
 2. **Python LLM library (`src/coach/llm/`)** — Provider-agnostic chat client for future CLI, REST, and Telegram entry points. The Python layer does **not** currently load `prompts/SYSTEM_PROMPT.md`—that integration is planned (see Next Steps).
 
@@ -87,19 +87,20 @@ for chunk in llm.stream([Message(role="user", content="bench cues?")]):
 
 Default models: `anthropic` → `claude-haiku-4-5-20251001`, `openai` → `gpt-4o-mini`, `ollama` → `llama3.2`, `gemini` → `gemini-2.0-flash`.
 
-### Training Program (`data/program.json`)
+### Training Programs (`data/programs/`)
 
-| Day | Focus | Key lifts |
-| :--- | :--- | :--- |
-| D1 | Lower Strength | Back Squat 5×5, RDL, Leg Press |
-| D2 | Upper Strength | Bench Press 5×5, Barbell Row, Incline Bench |
-| D4 | Lower Hypertrophy | Hack Squat, Leg Curl, Lunges, Hip Thrust |
-| D5 | Upper Hypertrophy | Low Row, Lat Pulldown, Chest Fly, Arms superset |
+Programs are stored as JSON files in `data/programs/`. The active program is identified by `data/programs/active.txt`.
 
-Tonnage formulas:
-- **Barbell:** `(weight_per_side × 2 + 20kg bar) × reps × sets`
+Manage programs with:
+- `/programs` — list all programs
+- `/program show [id]` — view a program
+- `/program switch <id>` — activate a program
+- `/program clone <src> <dst>` — copy a program (then hand-edit the JSON)
+
+Tonnage formulas (from `program.barbell_weight_kg` in the active program file):
+- **Barbell:** `(weight_per_side × 2 + barbell_weight_kg) × reps × sets`
 - **Machine/cable/dumbbell:** `weight × reps × sets`
-- **Isometric (Weighted Plank):** track as TuT (seconds), no tonnage
+- **Isometric:** track as TuT (seconds), no tonnage
 
 ## Testing
 
@@ -116,7 +117,6 @@ Tests import via `from src.coach.llm... import ...` (e.g. `tests/test_llm_provid
 - Isometric exercises tracked by TuT (seconds), not tonnage
 - Logs saved to `logs/YYYY-MM-DD.md` (git-ignored)
 - Conventional Commits: `feat:`, `fix:`, `chore:`, `test:`
-- `templates/daily_tracking_table.md` and `templates/evolution_chart.md` are consumed by the `coach` skill — keep their column shape stable; the skill references them in its interaction loop.
 
 ## Next Steps (In Development)
 
