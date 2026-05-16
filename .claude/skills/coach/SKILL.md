@@ -21,7 +21,7 @@ Load the system prompt from `prompts/SYSTEM_PROMPT.md` and follow it strictly.
    ---
 
 2. **### Session Status**
-   Output the current day's tracking table (from `templates/daily_tracking_table.md`).
+   Output the current day's tracking table based on the active program.
    Mark each exercise as ✅ DONE / ⏳ PENDING / ❌ SKIPPED.
    Flag PRs: 🏆 Volume PR or 💪 Weight PR.
 
@@ -29,7 +29,7 @@ Load the system prompt from `prompts/SYSTEM_PROMPT.md` and follow it strictly.
 
 3. **### Next Exercise**
    State the target for the next exercise in the sequence.
-   Use `data/program.json` as the source of truth.
+   Use the active program in `data/programs/<active_id>.json` as the source of truth.
 
    ---
 
@@ -48,11 +48,11 @@ Load the system prompt from `prompts/SYSTEM_PROMPT.md` and follow it strictly.
 
 ## `/day <DX>` Command Handler
 
-When the user's message contains `/day D1`, `/day D2`, `/day D4`, or `/day D5`:
+When the user's message contains `/day <day_id>` where `<day_id>` is a key in the active program:
 
 Override **Step 2 (Session Status)** of the Interaction Loop with a **Day Plan** section.
 
-Render a tracking table for **only the requested day** using `data/program.json` as the source of truth.
+Render a tracking table for **only the requested day** using the active program in `data/programs/<active_id>.json` as the source of truth.
 Pre-fill every row with planned values — do not leave Weight, Sets × Reps, or Tonnage empty.
 
 ### Day Plan Table Format
@@ -95,14 +95,14 @@ Calculate sum of all tonnage (excluding isometric TuT) to get the day's total pl
 
 ### Invalid or Rest-Day Inputs
 
-If the user sends `/day D3`, `/day D6`, `/day D7`, or any other unrecognized day:
-- Respond: **"D3, D6, and D7 are rest days — no plan available. Valid training days are D1, D2, D4, and D5."**
+If the day_id is in the program's `rest_days` array:
+- Respond: **"<day_id> is a rest day — no plan available. Valid training days are: [list keys from program.days]."**
 - Then continue with Steps 3–5 of the Interaction Loop (skipping the Day Plan and Step 2):
   - 3. **Next Exercise** — (not applicable for rest days; explain briefly)
   - 4. **Technical Cues** — (not applicable for rest days)
   - 5. **Ready?** — Offer rest/recovery suggestions instead
 
-If the user sends any malformed input (e.g., `/day foo`, `/day`), respond: **"Unknown day. Valid options: D1, D2, D4, D5."** Then continue with the standard Interaction Loop normally.
+If the day_id is not in `program.days` or input is malformed (e.g., `/day foo`, `/day`), respond: **"Unknown day. Valid options: [list keys from program.days]."** Then continue with the standard Interaction Loop normally.
 
 ### Then Continue the Loop
 
@@ -128,11 +128,15 @@ List all available slash commands with a one-line description each. Language Spo
 **Format (Markdown):**
 
 ```
-/day <DX>        — Show the full Day Plan for D1, D2, D4, or D5 and start the session
-/trainings       — Overview of all 4 training days with exercises (read-only)
-/training <DX>   — Detailed exercise list for a specific day (read-only)
-/help            — Show this command list
-/start           — Welcome message and command list
+/day <DX>                    — Show the full Day Plan for a training day and start the session
+/trainings                   — Overview of all training days with exercises (read-only)
+/training <DX>               — Detailed exercise list for a specific day (read-only)
+/programs                    — List all training programs (active one is marked ✅)
+/program show [id]           — Show details for a program (defaults to active)
+/program switch <id>         — Switch to a different training program
+/program clone <src> <dst>   — Clone a program as a starting point for a new one
+/help                        — Show this command list
+/start                       — Welcome message and command list
 ```
 
 ---
@@ -148,11 +152,15 @@ Output a brief welcome message followed by the same command list as `/help`. Lan
 ```
 Welcome, Fabiano! 💪 Here's what you can do:
 
-/day <DX>        — Show the full Day Plan for D1, D2, D4, or D5 and start the session
-/trainings       — Overview of all 4 training days with exercises (read-only)
-/training <DX>   — Detailed exercise list for a specific day (read-only)
-/help            — Show this command list
-/start           — Welcome message and command list
+/day <DX>                    — Show the full Day Plan for a training day and start the session
+/trainings                   — Overview of all training days with exercises (read-only)
+/training <DX>               — Detailed exercise list for a specific day (read-only)
+/programs                    — List all training programs (active one is marked ✅)
+/program show [id]           — Show details for a program (defaults to active)
+/program switch <id>         — Switch to a different training program
+/program clone <src> <dst>   — Clone a program as a starting point for a new one
+/help                        — Show this command list
+/start                       — Welcome message and command list
 ```
 
 ---
@@ -169,9 +177,9 @@ Language Spotter still runs at the top. If the message is a bare command with no
 
 ### `/trainings` — Full Program Overview
 
-When the user's message contains `/trainings` (trailing args are ignored — always show all 4 days):
+When the user's message contains `/trainings` (trailing args are ignored — always show all days in the active program):
 
-Render a numbered exercise list for each training day in order: **D1, D2, D4, D5**.
+Render a numbered exercise list for each training day in the active program, in the order they appear in the `days` object.
 
 **Per-day format:**
 
@@ -199,7 +207,7 @@ No tonnage, no Status, no Notes columns.
 
 ### `/training <DX>` — Single Day Detail
 
-When the user's message contains `/training D1`, `/training D2`, `/training D4`, or `/training D5`:
+When the user's message contains `/training <day_id>` where `<day_id>` is a key in the active program's `days` object:
 
 Render the Day Plan table from the `/day <DX>` handler, **omitting the Status column** (read-only view, not an active session):
 
@@ -215,14 +223,13 @@ After the table, render the summary line:
 
 | Input | Response |
 | :--- | :--- |
-| `/training D3`, `/training D6`, `/training D7` | "D3, D6, and D7 are rest days — no exercises planned. Valid training days are D1, D2, D4, and D5." |
-| `/training foo` or `/training` (no arg) | "Unknown day. Valid options: D1, D2, D4, D5." |
+| day_id is in `rest_days` | "<day_id> is a rest day — no exercises planned. Valid training days are: [list keys from program.days]." |
+| day_id not in `days` or missing | "Unknown day. Valid options: [list keys from program.days]." |
 
 ---
 
 ## Files Referenced
 - `prompts/SYSTEM_PROMPT.md` — full behavior definition
-- `data/program.json` — training program data
-- `templates/daily_tracking_table.md` — per-session tracking table
-- `templates/evolution_chart.md` — weekly progress chart
+- `data/programs/<active_id>.json` — active training program data
+- `data/programs/active.txt` — active program pointer
 - `logs/` — session logs (one file per date, e.g., `logs/2026-03-28.md`)
