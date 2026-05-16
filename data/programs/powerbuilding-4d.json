@@ -1,5 +1,10 @@
 {
+  "program_id": "powerbuilding-4d",
+  "name": "Powerbuilding 4-Day Split",
+  "description": "4-day powerbuilding: lower/upper strength + lower/upper hypertrophy",
+  "created_at": "2026-05-13",
   "barbell_weight_kg": 20,
+  "rest_days": ["D3", "D6", "D7"],
   "days": {
     "D1": {
       "label": "LOWER | STRENGTH",
