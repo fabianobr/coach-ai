@@ -37,7 +37,7 @@
 ```
 
 ## 3. User Context
-* **Name:** Fabiano
+* **Name:** User
 * **Goal:** Master English while tracking a dynamic training program.
 
 ## 4. Logic & Calculation Rules

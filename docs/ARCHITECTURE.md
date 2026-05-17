@@ -5,11 +5,12 @@ This document provides a comprehensive overview of the coach-ai system architect
 ## Overview
 
 **coach-ai** is a dual-role virtual coach application that:
-1. **Tracks gym workouts** — Analyzes exercise data for a 4-day Powerbuilding split, calculates tonnage, detects PRs, and suggests progressive overload strategies
+1. **Tracks gym workouts** — Tracks workout data on dynamic, configurable training programs, calculates tonnage, detects PRs, and suggests progressive overload strategies
 2. **Corrects English** — Every user interaction begins with a "Language Spotter" block that fixes grammar and vocabulary issues
 
-The system runs in three independent entry points:
+The system runs in four independent entry points:
 - **Claude Code Skill** — Direct integration in the Claude Code IDE
+- **CLI** — Interactive terminal session (`python -m coach`)
 - **REST API** — FastAPI-based HTTP interface for programmatic access
 - **Telegram Bot** — Real-time messaging interface for on-the-go coaching
 
@@ -52,12 +53,12 @@ C4Container
     
     Person(user, "User", "An athlete")
     
-    Container(claude_skill, "Claude Code Skill", "Python + Markdown", "Interactive coaching interface; loads SYSTEM_PROMPT.md, program.json, and templates")
+    Container(claude_skill, "Claude Code Skill", "Python + Markdown", "Interactive coaching interface; loads SYSTEM_PROMPT.md and the active program from data/programs/")
     Container(api, "REST API", "FastAPI", "HTTP endpoints for chat and health checks; manages sessions")
     Container(telegram_bot, "Telegram Bot", "python-telegram-bot", "Async message handlers and streaming responses; user session management")
     
     Container(llm_layer, "LLM Abstraction", "Python", "Provider-agnostic chat interface; supports Anthropic, OpenAI, Ollama, Gemini")
-    Container(data, "Data Layer", "JSON, Markdown, Logs", "program.json (4-day split), SYSTEM_PROMPT.md, templates, session logs")
+    Container(data, "Data Layer", "JSON, Markdown, Logs", "data/programs/<id>.json (active program), SYSTEM_PROMPT.md, session logs")
     
     System_Ext(llm_provider, "LLM Provider", "Claude, GPT, Llama, or Gemini API")
     System_Ext(telegram, "Telegram Service", "Messaging platform")
@@ -287,9 +288,9 @@ sequenceDiagram
     SessionStore-->>CommandHandler: UserSession object
     deactivate SessionStore
     
-    CommandHandler->>DataLoader: Load program.json (if needed)
+    CommandHandler->>DataLoader: Load active program (data/programs/)
     activate DataLoader
-    Note over DataLoader: Cache program data<br/>for day selection
+    Note over DataLoader: Reads active.txt to find<br/>program ID, loads JSON
     DataLoader-->>CommandHandler: Program dict
     deactivate DataLoader
     
@@ -300,12 +301,12 @@ sequenceDiagram
     deactivate MessageService
     
     CommandHandler->>Telegram: reply_text(welcome_message)
-    Telegram->>User: Display welcome message:<br/>"Welcome to Coach AI! 🏋️<br/><br/>Send me a workout message or use:<br/>/day D1 — Set training day<br/>/status — See today's exercises<br/>/done — End session & save log<br/>/help — Show this message"
+    Telegram->>User: Display welcome message with<br/>available commands and quick-start tips
     
     deactivate CommandHandler
     deactivate Telegram
     
-    Note over User,Telegram: User is now ready to:<br/>1. Set training day (/day D1)<br/>2. Log exercises (/done)<br/>3. Check day details (/status)
+    Note over User,Telegram: User is now ready to interact
 ```
 
 ### Data State After /start
@@ -321,11 +322,18 @@ sequenceDiagram
 }
 ```
 
-**Available commands sent to user:**
+**Available commands:**
+
 | Command | Purpose |
 |---------|---------|
-| `/day D1` | Set active training day (D1, D2, D4, or D5) |
-| `/status` | Display exercises for current day |
+| `/day <DX>` | Set active training day and display its plan |
+| `/trainings` | Overview of all training days (read-only) |
+| `/training <DX>` | Exercises for a specific day (read-only) |
+| `/programs` | List all training programs (active marked ✅) |
+| `/program show [id]` | View a program |
+| `/program switch <id>` | Activate a program |
+| `/program clone <src> <dst>` | Copy a program |
+| `/status` | Show today's exercise list |
 | `/done` | End session, save workout log, clear session |
 | `/help` | Show command list |
 | Any text | Log workout (parsed + Language Spotter correction) |
@@ -374,11 +382,12 @@ stateDiagram-v2
 
 ### 1. Entry Point Layer
 
-Three independent interfaces deliver the same coaching experience:
+Four independent interfaces deliver the same coaching experience:
 
 | Interface | Technology | Use Case |
 |-----------|-----------|----------|
 | **Claude Code Skill** | `.claude/skills/coach/SKILL.md` + Python | IDE-native experience; loads all resources |
+| **CLI** | `python -m coach` | Local interactive use in the terminal |
 | **REST API** | FastAPI + SessionStore | Programmatic access; HTTP clients |
 | **Telegram Bot** | python-telegram-bot + UserSessionStore | Real-time mobile-friendly messaging |
 
@@ -494,11 +503,12 @@ Rather than retrofitting grammar checking, it's baked into `SYSTEM_PROMPT.md` as
 
 ### 4. Modular Entry Points
 
-The same core logic (LLM layer + data) is consumed by three independent interfaces. This allows:
+The same core logic (LLM layer + data) is consumed by four independent interfaces. This allows:
 - Rapid prototyping (Claude Code Skill)
+- Local use (CLI)
 - Production deployment (REST API)
 - Mobile-first interaction (Telegram Bot)
-- Future integrations (CLI, Discord, Slack) with minimal code duplication
+- Future integrations (Discord, Slack) with minimal code duplication
 
 ---
 
@@ -528,12 +538,11 @@ Cloud Infrastructure
 
 ## Future Extensions
 
-1. **CLI Entry Point** — `python -m coach` with full interaction loop
-2. **Discord Bot** — Same handlers as Telegram, different platform
-3. **Session Persistence** — PostgreSQL backend for scalable multi-user deployment
-4. **Telegram Inline Buttons** — Quick selection for exercise logging
-5. **Analytics Dashboard** — Tonnage trends, strength curves, form assessment
-6. **Video Analysis** — Integration with form-checking APIs
+1. **Discord Bot** — Same handlers as Telegram, different platform
+2. **Session Persistence** — PostgreSQL backend for scalable multi-user deployment
+3. **Telegram Inline Buttons** — Quick selection for exercise logging
+4. **Analytics Dashboard** — Tonnage trends, strength curves, form assessment
+5. **Video Analysis** — Integration with form-checking APIs
 
 ---
 
@@ -568,6 +577,7 @@ coach-ai/
 │   │       └── gemini.py
 │   ├── api/                    # REST API
 │   │   ├── app.py              # FastAPI app + lifespan
+│   │   ├── models.py           # Pydantic request/response models
 │   │   ├── routes/
 │   │   │   ├── chat.py         # POST /chat
 │   │   │   └── health.py       # GET /health
@@ -575,18 +585,22 @@ coach-ai/
 │   ├── telegram/               # Telegram Bot
 │   │   ├── bot.py              # CoachBot class
 │   │   ├── handlers.py         # Message handlers
+│   │   ├── formatting.py       # Telegram HTML formatting helpers
 │   │   └── user_sessions.py
-│   ├── cli.py                  # CLI entry point (future)
+│   ├── cli.py                  # CLI entry point
 │   ├── logger.py               # Session logging
+│   ├── programs.py             # Program loader and active-program management
 │   └── paths.py                # Resource file paths
 ├── prompts/
 │   └── SYSTEM_PROMPT.md        # Dual-role + Language Spotter instructions
-├── data/
-│   └── program.json            # 4-day Powerbuilding split
-├── templates/
-│   ├── daily_tracking_table.md
-│   └── evolution_chart.md
+├── data/programs/
+│   ├── active.txt              # Active program ID
+│   └── <program_id>.json       # Training program definitions
+├── scripts/
+│   ├── start_telegram_bot.py   # Verified launch script (cross-platform)
+│   └── start_telegram_bot.sh   # Bash launch script
 ├── tests/                      # Unit & integration tests
+│   └── fixtures/programs/      # Isolated program fixtures for tests
 ├── .claude/skills/coach/
 │   └── SKILL.md                # Claude Code skill
 └── docs/
@@ -599,7 +613,8 @@ coach-ai/
 
 ## Related Documentation
 
-- **[CLAUDE.md](../CLAUDE.md)** — Project rules, setup, architecture overview
+- **[AGENTS.md](../AGENTS.md)** — Project rules, architecture, conventions for all AI coding assistants
+- **[CONTRIBUTING.md](../CONTRIBUTING.md)** — Contributor guide
 - **[SYSTEM_PROMPT.md](../prompts/SYSTEM_PROMPT.md)** — Coaching instructions + Language Spotter logic
 - **[TELEGRAM_BOT_SETUP.md](./TELEGRAM_BOT_SETUP.md)** — Telegram deployment guide
 - **[API_GUIDE.md](./API_GUIDE.md)** — REST API endpoint documentation

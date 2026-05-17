@@ -4,7 +4,7 @@ Your Coach AI Telegram bot is ready to test in production! This guide covers eve
 
 ## Prerequisites
 
-✅ **Telegram Bot Token** — You've already provided: `8792230414:AAHFfXdJRpB69gUuvhNL6qKBHspJ0bJLnvU`
+✅ **Telegram Bot Token** — Create a bot via @BotFather on Telegram and add the token to `.env` as `TELEGRAM_BOT_TOKEN=<your_token>`
 
 ✅ **Ollama Running** — Local LLM server should be accessible at `http://localhost:11434`
 
@@ -80,16 +80,22 @@ Once the bot is running, you'll see:
 2. Search for your bot's username (you created it in BotFather)
 3. Or use the bot link: `https://t.me/<your_bot_username>`
 
-### Test Commands
+### Available Commands
 
 Once you've opened the bot chat:
 
 ```
-/start          → Welcome message with available commands
-/day D1         → Set training day to Lower Strength
-/status         → Show today's exercises
-/help           → Show help message (same as /start)
-/done           → Save session and end workout
+/start                     → Welcome message with available commands
+/day <DX>                  → Set training day and display its plan
+/trainings                 → Overview of all training days (read-only)
+/training <DX>             → Exercises for a specific day (read-only)
+/programs                  → List all training programs (active marked ✅)
+/program show [id]         → View a program
+/program switch <id>       → Activate a program
+/program clone <src> <dst> → Copy a program
+/status                    → Show today's exercise list
+/done                      → Save session and end workout
+/help                      → Show command list (same as /start)
 ```
 
 ### Test Message Flow
@@ -99,8 +105,8 @@ Once you've opened the bot chat:
    - ✅ Verifies Telegram connectivity
 
 2. **Send `/day D1`**
-   - Bot confirms: "✅ Training day set to D1 (Lower Strength)"
-   - ✅ Verifies command handling
+   - Bot displays the day plan for D1
+   - ✅ Verifies command handling and active program loading
 
 3. **Send a workout message**
    ```
@@ -115,8 +121,8 @@ Once you've opened the bot chat:
    ```
    /status
    ```
-   - Bot shows all exercises for D1
-   - ✅ Verifies program.json loading
+   - Bot shows all exercises for the active day
+   - ✅ Verifies active program loading from `data/programs/`
 
 5. **Send `/done`**
    ```
@@ -139,9 +145,9 @@ Once you've opened the bot chat:
 - Check that `LLM_BASE_URL` in `.env` matches your Ollama URL
 
 ### "SYSTEM_PROMPT.md not found"
-- The file should be at: `./prompts/SYSTEM_PROMPT.md`
+- The file lives at `prompts/SYSTEM_PROMPT.md` in the repo root
 - Verify it exists: `ls -la prompts/SYSTEM_PROMPT.md`
-- Both startup scripts set the environment variable automatically
+- Both startup scripts set the `COACH_SYSTEM_PROMPT_MD_PATH` env var automatically
 
 ### "No module named 'openai'"
 - Install with: `pip install -e ".[ollama,telegram]"`
@@ -181,31 +187,32 @@ Once you've opened the bot chat:
 4. **Workout Logging** (`logger.py`):
    - `/done` command saves to `logs/YYYY-MM-DD.md`
    - Logs include all exercises from the session
-   - Training day (D1/D2/D4/D5) is recorded
+   - Training day is recorded
 
 ## Resource Architecture
 
-Your setup uses this file structure:
-
 ```
 coach-ai/
-├── .env                        ← Configuration (already set up)
+├── .env                          ← Configuration
 ├── scripts/
-│   ├── start_telegram_bot.py  ← Run this to start!
-│   └── start_telegram_bot.sh  ← Or this (bash version)
+│   ├── start_telegram_bot.py    ← Run this to start! (recommended)
+│   └── start_telegram_bot.sh    ← Or this (bash version)
 ├── prompts/
-│   └── SYSTEM_PROMPT.md       ← AI behavior definition
-├── data/programs/              ← Training program definitions
+│   └── SYSTEM_PROMPT.md         ← AI behavior definition
+├── data/programs/
+│   ├── active.txt               ← Active program ID
+│   └── <program_id>.json        ← Training program definition
 ├── src/
 │   └── coach/
 │       ├── telegram/
-│       │   ├── bot.py         ← Core bot logic
-│       │   ├── handlers.py    ← Command handlers
+│       │   ├── bot.py           ← Core bot logic
+│       │   ├── handlers.py      ← Command handlers
+│       │   ├── formatting.py    ← Telegram HTML helpers
 │       │   └── user_sessions.py ← Session management
-│       ├── llm/               ← LLM abstraction layer
-│       └── logger.py          ← Workout logging
+│       ├── llm/                 ← LLM abstraction layer
+│       └── logger.py            ← Workout logging
 └── logs/
-    └── YYYY-MM-DD.md          ← Saved workouts
+    └── YYYY-MM-DD.md            ← Saved workouts (git-ignored)
 ```
 
 ## Next Steps (After Testing)
