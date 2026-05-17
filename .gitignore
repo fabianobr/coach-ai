@@ -8,3 +8,8 @@ dist/
 .ruff_cache/
 logs/*.md
 .DS_Store
+*.key
+*.pem
+*.p12
+secrets*
+credentials*

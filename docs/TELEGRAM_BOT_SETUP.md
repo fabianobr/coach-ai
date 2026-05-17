@@ -4,7 +4,7 @@ Your Coach AI Telegram bot is ready to test in production! This guide covers eve
 
 ## Prerequisites
 
-✅ **Telegram Bot Token** — You've already provided: `REDACTED_TOKEN`
+✅ **Telegram Bot Token** — Configure via BotFather e adicione ao `.env` como `TELEGRAM_BOT_TOKEN=<seu_token>`
 
 ✅ **Ollama Running** — Local LLM server should be accessible at `http://localhost:11434`
 
