@@ -47,7 +47,7 @@ Your `.env` file is already configured:
 LLM_PROVIDER=ollama
 LLM_MODEL=llama3.2
 LLM_BASE_URL=http://localhost:11434/v1
-TELEGRAM_BOT_TOKEN=8792230414:AAHFfXdJRpB69gUuvhNL6qKBHspJ0bJLnvU
+TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
 ```
 
 ### Verify Ollama is Running
