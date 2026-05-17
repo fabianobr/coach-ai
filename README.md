@@ -160,4 +160,4 @@ This tool does not replace professional coaching or medical advice.
 
 ## License
 
-[MIT](LICENSE) — Copyright (c) 2026 Fabiano Braga
+[MIT](LICENSE) — Copyright (c) 2026 Fabiano de Freitas
