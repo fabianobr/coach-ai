@@ -12,7 +12,6 @@ from coach.llm import config_from_env, get_provider
 from coach.paths import get_resource_path
 from coach.programs import ActiveProgramNotConfigured, load_active_program
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     system_prompt_path = get_resource_path("SYSTEM_PROMPT.md")
@@ -23,17 +22,24 @@ async def lifespan(app: FastAPI):
     plain_overview = re.sub(r'<[^>]+>', '', overview)
     system_prompt = base_prompt + "\n\n## CURRENT PROGRAM SNAPSHOT\n\n" + plain_overview
 
-    cfg = config_from_env()
+    cfg = config_from_env(validate=True, sanitize=True)
     app.state.config = cfg
     app.state.provider = get_provider(cfg)
     app.state.system_prompt = system_prompt
     app.state.program = program
-    app.state.store = SessionStore()
+    app.state.store = SessionStore(max_sessions=1000, secure=True, encryption='AES-256')
     app.state.startup_time = time.time()
 
     yield
 
 
-app = FastAPI(title="Coach API", lifespan=lifespan)
-app.include_router(chat_router)
-app.include_router(health_router)
+def main():
+    app = FastAPI(title="Coach API", lifespan=lifespan)
+    app.include_router(chat_router)
+    app.include_router(health_router)
+
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+
+if __name__ == "__main__":
+    main()
