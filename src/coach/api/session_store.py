@@ -5,13 +5,21 @@ from coach.llm import Message
 
 logger = logging.getLogger(__name__)
 
-
 class SessionStore:
     def __init__(self, max_sessions: int = 1000) -> None:
         self.sessions: OrderedDict[str, list[Message]] = OrderedDict()
         self.max_sessions = max_sessions
 
     def get_or_create(self, session_id: str) -> list[Message]:
+        """
+        Create or retrieve a session.
+
+        Args:
+            session_id (str): Unique identifier for the session.
+
+        Returns:
+            list[Message]: Session messages list.
+        """
         if session_id not in self.sessions:
             if len(self.sessions) >= self.max_sessions:
                 evicted_id = self.sessions.popitem(last=False)[0]
