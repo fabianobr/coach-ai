@@ -58,3 +58,7 @@ class GeminiProvider(LLMProvider):
         for chunk in chat.send_message(last_message, stream=True):
             if chunk.text:
                 yield chunk.text
+
+    @property
+    def supports_audio_transcription(self) -> bool:
+        return False

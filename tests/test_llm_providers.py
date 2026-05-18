@@ -66,6 +66,15 @@ class TestAnthropicProvider:
                 cfg = LLMConfig(provider="anthropic", model="x", api_key="k")
                 mod.AnthropicProvider(cfg)
 
+    def test_supports_audio_transcription_false(self):
+        provider, client = self._make_provider()
+        assert provider.supports_audio_transcription is False
+
+    def test_transcribe_audio_raises(self):
+        provider, client = self._make_provider()
+        with pytest.raises(NotImplementedError):
+            provider.transcribe_audio("fake.wav")
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # OpenAI
@@ -121,6 +130,22 @@ class TestOpenAIProvider:
         call_kwargs = mock_openai_module.OpenAI.call_args[1]
         assert call_kwargs["base_url"] == "http://proxy/v1"
 
+    def test_supports_audio_transcription_true(self):
+        provider, client = self._make_provider()
+        assert provider.supports_audio_transcription is True
+
+    def test_transcribe_audio_calls_whisper(self, tmp_path):
+        provider, client = self._make_provider()
+        audio_file = tmp_path / "test.wav"
+        audio_file.write_bytes(b"fake audio data")
+        mock_transcript = MagicMock(text="hello world")
+        client.audio.transcriptions.create.return_value = mock_transcript
+        result = provider.transcribe_audio(str(audio_file))
+        assert result == "hello world"
+        client.audio.transcriptions.create.assert_called_once()
+        call_kwargs = client.audio.transcriptions.create.call_args[1]
+        assert call_kwargs["model"] == "whisper-1"
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Ollama
@@ -165,6 +190,16 @@ class TestOllamaProvider:
         ]
         result = provider.chat(_msgs("test"))
         assert result == "squat ok"
+
+    def test_audio_transcription_delegates(self, tmp_path):
+        provider, client = self._make_provider()
+        audio_file = tmp_path / "test.wav"
+        audio_file.write_bytes(b"fake audio data")
+        mock_transcript = MagicMock(text="ollama audio result")
+        client.audio.transcriptions.create.return_value = mock_transcript
+        assert provider.supports_audio_transcription is True
+        result = provider.transcribe_audio(str(audio_file))
+        assert result == "ollama audio result"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -213,3 +248,12 @@ class TestGeminiProvider:
         model.start_chat.return_value = mock_chat
         result = list(provider.stream(_msgs("row cues?")))
         assert result == ["row ", "cues"]
+
+    def test_supports_audio_transcription_false(self):
+        provider, model = self._make_provider()
+        assert provider.supports_audio_transcription is False
+
+    def test_transcribe_audio_raises(self):
+        provider, model = self._make_provider()
+        with pytest.raises(NotImplementedError):
+            provider.transcribe_audio("fake.wav")

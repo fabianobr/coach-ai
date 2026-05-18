@@ -13,3 +13,4 @@ logs/*.md
 *.p12
 secrets*
 credentials*
+.env

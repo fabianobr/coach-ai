@@ -46,3 +46,15 @@ class OpenAIProvider(LLMProvider):
             delta = chunk.choices[0].delta.content
             if delta:
                 yield delta
+
+    @property
+    def supports_audio_transcription(self) -> bool:
+        return True
+
+    def transcribe_audio(self, file_path: str, mime_type: str | None = None) -> str:
+        with open(file_path, "rb") as f:
+            transcript = self._client.audio.transcriptions.create(
+                model="whisper-1",
+                file=f,
+            )
+        return transcript.text

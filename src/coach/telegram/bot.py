@@ -2,7 +2,10 @@ import asyncio
 import logging
 import os
 import re
+import subprocess
+import tempfile
 from datetime import datetime
+from pathlib import Path
 
 from telegram import Update
 from telegram.constants import ChatAction, ParseMode
@@ -64,6 +67,14 @@ class CoachBot:
         self.system_prompt = self._build_system_prompt_with_snapshot()
         self.provider = get_provider()
 
+        # Validate audio transcription support if enabled
+        audio_enabled = os.getenv("TELEGRAM_AUDIO_ENABLED", "false").lower() == "true"
+        if audio_enabled and not self.provider.supports_audio_transcription:
+            raise ValueError(
+                f"TELEGRAM_AUDIO_ENABLED=true but {self.provider.__class__.__name__} "
+                "does not support audio transcription. Use OpenAI provider or disable audio."
+            )
+
         app = Application.builder().token(self.token).build()
 
         app.add_handler(CommandHandler("start", self.handle_start))
@@ -76,6 +87,9 @@ class CoachBot:
         app.add_handler(CommandHandler("programs", self.handle_programs))
         app.add_handler(CommandHandler("program", self.handle_program))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
+
+        if audio_enabled:
+            app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, self.handle_audio))
 
         await app.initialize()
         await app.start()
@@ -485,3 +499,102 @@ class CoachBot:
 
     async def handle_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await self.handle_start(update, context)
+
+    async def handle_audio(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle incoming voice and audio messages."""
+        user_id = update.effective_user.id
+        user_lock = self.store.get_lock(user_id)
+
+        async with user_lock:
+            await self._handle_audio_impl(update, context, user_id)
+
+    async def _handle_audio_impl(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int
+    ) -> None:
+        """Implementation of audio handling with per-user serialization."""
+        # Get audio file info
+        if update.message.voice:
+            audio = update.message.voice
+        elif update.message.audio:
+            audio = update.message.audio
+        else:
+            await update.message.reply_text("Could not detect audio file.")
+            return
+
+        # Check file size against limit
+        max_mb = float(os.getenv("TELEGRAM_AUDIO_MAX_MB", "20"))
+        max_bytes = max_mb * 1024 * 1024
+        if audio.file_size and audio.file_size > max_bytes:
+            await update.message.reply_text(
+                f"⚠️ Audio file too large. Maximum: {max_mb} MB.",
+                parse_mode=ParseMode.HTML
+            )
+            return
+
+        ogg_path = None
+        wav_path = None
+        try:
+            # Download audio file
+            file = await context.bot.get_file(audio.file_id)
+            with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as ogg_file:
+                ogg_path = ogg_file.name
+            await file.download_to_drive(ogg_path)
+
+            # Convert OGG/Opus to WAV using ffmpeg
+            wav_path = ogg_path.replace(".ogg", ".wav")
+            subprocess.run(
+                ["ffmpeg", "-i", ogg_path, "-acodec", "pcm_s16le", "-ar", "16000", wav_path],
+                capture_output=True,
+                timeout=30,
+                check=True,
+            )
+
+            # Transcribe audio
+            try:
+                transcript = self.provider.transcribe_audio(wav_path)
+            except Exception as e:
+                logger.error(f"Transcription failed for user {user_id}: {e}", exc_info=True)
+                await update.message.reply_text(
+                    "⚠️ Transcription failed. Try again with a clearer audio file."
+                )
+                return
+
+            if not transcript or not transcript.strip():
+                await update.message.reply_text(
+                    "⚠️ No speech detected in audio. Try again."
+                )
+                return
+
+            # Pass transcript through the same message handling logic
+            update.message.text = transcript
+            await self._handle_message_impl(update, context, user_id)
+
+        except subprocess.TimeoutExpired:
+            logger.error(f"ffmpeg conversion timeout for user {user_id}")
+            await update.message.reply_text(
+                "⚠️ Audio processing timed out. Try a shorter clip."
+            )
+        except FileNotFoundError:
+            logger.error(f"ffmpeg not found for user {user_id}")
+            await update.message.reply_text(
+                "⚠️ Audio processing not available. Retry later."
+            )
+        except subprocess.CalledProcessError as e:
+            logger.error(f"ffmpeg failed for user {user_id}: {e.stderr.decode()}", exc_info=True)
+            await update.message.reply_text(
+                "⚠️ Could not process audio file. Try again."
+            )
+        except Exception as e:
+            logger.error(f"Audio handler error for user {user_id}: {e}", exc_info=True)
+            await update.message.reply_text(
+                "⚠️ Audio processing failed. Try again."
+            )
+        finally:
+            # Clean up temporary files
+            try:
+                if ogg_path:
+                    Path(ogg_path).unlink(missing_ok=True)
+                if wav_path:
+                    Path(wav_path).unlink(missing_ok=True)
+            except Exception as e:
+                logger.warning(f"Failed to clean up temp files for user {user_id}: {e}")

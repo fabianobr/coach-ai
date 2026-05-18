@@ -33,3 +33,7 @@ class AnthropicProvider(LLMProvider):
         with self._client.messages.stream(**self._build_params(messages, system)) as s:
             for text in s.text_stream:
                 yield text
+
+    @property
+    def supports_audio_transcription(self) -> bool:
+        return False

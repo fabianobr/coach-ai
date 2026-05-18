@@ -38,5 +38,27 @@ class LLMProvider(ABC):
         """Send messages and yield response text chunks as they arrive."""
         ...
 
+    @property
+    def supports_audio_transcription(self) -> bool:
+        """Whether this provider can transcribe audio."""
+        return False
+
+    def transcribe_audio(self, file_path: str, mime_type: str | None = None) -> str:
+        """Transcribe an audio file to text.
+
+        Args:
+            file_path: Path to the audio file (should be WAV format).
+            mime_type: MIME type of the audio file (optional).
+
+        Returns:
+            Transcribed text.
+
+        Raises:
+            NotImplementedError: If provider does not support audio transcription.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support audio transcription"
+        )
+
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(model={self.config.model!r})"
