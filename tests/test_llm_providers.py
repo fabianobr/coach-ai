@@ -191,15 +191,13 @@ class TestOllamaProvider:
         result = provider.chat(_msgs("test"))
         assert result == "squat ok"
 
-    def test_audio_transcription_delegates(self, tmp_path):
+    def test_audio_transcription_not_supported(self, tmp_path):
         provider, client = self._make_provider()
         audio_file = tmp_path / "test.wav"
         audio_file.write_bytes(b"fake audio data")
-        mock_transcript = MagicMock(text="ollama audio result")
-        client.audio.transcriptions.create.return_value = mock_transcript
-        assert provider.supports_audio_transcription is True
-        result = provider.transcribe_audio(str(audio_file))
-        assert result == "ollama audio result"
+        assert provider.supports_audio_transcription is False
+        with pytest.raises(NotImplementedError, match="Ollama does not support"):
+            provider.transcribe_audio(str(audio_file))
 
 
 # ──────────────────────────────────────────────────────────────────────────────

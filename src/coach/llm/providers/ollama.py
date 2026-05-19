@@ -35,7 +35,7 @@ class OllamaProvider(LLMProvider):
 
     @property
     def supports_audio_transcription(self) -> bool:
-        return self._delegate.supports_audio_transcription
+        return False
 
     def transcribe_audio(self, file_path: str, mime_type: str | None = None) -> str:
-        return self._delegate.transcribe_audio(file_path, mime_type)
+        raise NotImplementedError("Ollama does not support audio transcription.")

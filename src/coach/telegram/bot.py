@@ -68,8 +68,8 @@ class CoachBot:
         self.provider = get_provider()
 
         # Validate audio transcription support if enabled
-        audio_enabled = os.getenv("TELEGRAM_AUDIO_ENABLED", "false").lower() == "true"
-        if audio_enabled and not self.provider.supports_audio_transcription:
+        self.audio_enabled = os.getenv("TELEGRAM_AUDIO_ENABLED", "false").lower() == "true"
+        if self.audio_enabled and not self.provider.supports_audio_transcription:
             raise ValueError(
                 f"TELEGRAM_AUDIO_ENABLED=true but {self.provider.__class__.__name__} "
                 "does not support audio transcription. Use OpenAI provider or disable audio."
@@ -87,15 +87,20 @@ class CoachBot:
         app.add_handler(CommandHandler("programs", self.handle_programs))
         app.add_handler(CommandHandler("program", self.handle_program))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
-
-        if audio_enabled:
-            app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, self.handle_audio))
+        app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, self.handle_audio))
 
         await app.initialize()
         await app.start()
         logger.info("Telegram bot started. Polling for messages...")
         await app.updater.start_polling()
-        await asyncio.Event().wait()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            logger.info("Bot shutdown requested.")
+        finally:
+            await app.updater.stop()
+            await app.stop()
+            await app.shutdown()
 
     async def handle_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user_id = update.effective_user.id
@@ -252,11 +257,11 @@ class CoachBot:
             await self._handle_message_impl(update, context, user_id)
 
     async def _handle_message_impl(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int, text: str | None = None
     ) -> None:
         """Implementation of message handling with per-user serialization via lock."""
         session = self.store.get_or_create(user_id)
-        user_message = update.message.text
+        user_message = text if text is not None else update.message.text
 
         session.messages.append(Message(role="user", content=user_message))
 
@@ -512,6 +517,10 @@ class CoachBot:
         self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int
     ) -> None:
         """Implementation of audio handling with per-user serialization."""
+        if not self.audio_enabled:
+            await update.message.reply_text("⚠️ Voice messages are not enabled on this bot.")
+            return
+
         # Get audio file info
         if update.message.voice:
             audio = update.message.voice
@@ -566,8 +575,7 @@ class CoachBot:
                 return
 
             # Pass transcript through the same message handling logic
-            update.message.text = transcript
-            await self._handle_message_impl(update, context, user_id)
+            await self._handle_message_impl(update, context, user_id, text=transcript)
 
         except subprocess.TimeoutExpired:
             logger.error(f"ffmpeg conversion timeout for user {user_id}")
