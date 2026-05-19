@@ -191,13 +191,39 @@ class TestOllamaProvider:
         result = provider.chat(_msgs("test"))
         assert result == "squat ok"
 
-    def test_audio_transcription_not_supported(self, tmp_path):
+    def test_supports_audio_transcription_true(self):
+        provider, client = self._make_provider()
+        assert provider.supports_audio_transcription is True
+
+    def test_transcribe_audio_calls_whisper(self, tmp_path):
         provider, client = self._make_provider()
         audio_file = tmp_path / "test.wav"
         audio_file.write_bytes(b"fake audio data")
-        assert provider.supports_audio_transcription is False
-        with pytest.raises(NotImplementedError, match="Ollama does not support"):
-            provider.transcribe_audio(str(audio_file))
+        client.audio.transcriptions.create.return_value = MagicMock(text="squat 100kg")
+        result = provider.transcribe_audio(str(audio_file))
+        assert result == "squat 100kg"
+        call_kwargs = client.audio.transcriptions.create.call_args[1]
+        assert call_kwargs["model"] == "whisper"
+
+    def test_transcribe_audio_custom_whisper_model(self, tmp_path):
+        mock_openai_module = MagicMock()
+        mock_client = MagicMock()
+        mock_openai_module.OpenAI.return_value = mock_client
+        with patch.dict("sys.modules", {"openai": mock_openai_module}):
+            from src.coach.llm.providers.ollama import OllamaProvider
+            cfg = LLMConfig(
+                provider="ollama", model="llama3.2",
+                extra={"whisper_model": "whisper-large-v3"},
+            )
+            provider = OllamaProvider(cfg)
+        provider._delegate._client = mock_client
+        audio_file = tmp_path / "test.wav"
+        audio_file.write_bytes(b"fake audio data")
+        mock_client.audio.transcriptions.create.return_value = MagicMock(text="bench 80kg")
+        result = provider.transcribe_audio(str(audio_file))
+        assert result == "bench 80kg"
+        call_kwargs = mock_client.audio.transcriptions.create.call_args[1]
+        assert call_kwargs["model"] == "whisper-large-v3"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
