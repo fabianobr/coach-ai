@@ -195,20 +195,28 @@ class TestOllamaProvider:
         provider, client = self._make_provider()
         assert provider.supports_audio_transcription is True
 
-    def test_transcribe_audio_calls_whisper(self, tmp_path):
+    def test_transcribe_audio_calls_native_endpoint(self, tmp_path):
         provider, client = self._make_provider()
         audio_file = tmp_path / "test.wav"
         audio_file.write_bytes(b"fake audio data")
-        client.audio.transcriptions.create.return_value = MagicMock(text="squat 100kg")
-        result = provider.transcribe_audio(str(audio_file))
+
+        import json as _json
+        mock_resp = MagicMock()
+        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        mock_resp.read.return_value = _json.dumps({"text": "squat 100kg"}).encode()
+
+        with patch("urllib.request.urlopen", return_value=mock_resp) as mock_urlopen:
+            result = provider.transcribe_audio(str(audio_file))
+
         assert result == "squat 100kg"
-        call_kwargs = client.audio.transcriptions.create.call_args[1]
-        assert call_kwargs["model"] == "whisper"
+        req = mock_urlopen.call_args[0][0]
+        assert req.full_url == "http://localhost:11434/api/transcribe"
+        assert provider._whisper_model == "whisper"
 
     def test_transcribe_audio_custom_whisper_model(self, tmp_path):
         mock_openai_module = MagicMock()
-        mock_client = MagicMock()
-        mock_openai_module.OpenAI.return_value = mock_client
+        mock_openai_module.OpenAI.return_value = MagicMock()
         with patch.dict("sys.modules", {"openai": mock_openai_module}):
             from src.coach.llm.providers.ollama import OllamaProvider
             cfg = LLMConfig(
@@ -216,14 +224,30 @@ class TestOllamaProvider:
                 extra={"whisper_model": "whisper-large-v3"},
             )
             provider = OllamaProvider(cfg)
-        provider._delegate._client = mock_client
+
         audio_file = tmp_path / "test.wav"
         audio_file.write_bytes(b"fake audio data")
-        mock_client.audio.transcriptions.create.return_value = MagicMock(text="bench 80kg")
-        result = provider.transcribe_audio(str(audio_file))
+
+        import json as _json
+        mock_resp = MagicMock()
+        mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        mock_resp.read.return_value = _json.dumps({"text": "bench 80kg"}).encode()
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            result = provider.transcribe_audio(str(audio_file))
+
         assert result == "bench 80kg"
-        call_kwargs = mock_client.audio.transcriptions.create.call_args[1]
-        assert call_kwargs["model"] == "whisper-large-v3"
+        assert provider._whisper_model == "whisper-large-v3"
+
+    def test_transcribe_audio_strips_v1_from_base_url(self):
+        mock_openai_module = MagicMock()
+        mock_openai_module.OpenAI.return_value = MagicMock()
+        with patch.dict("sys.modules", {"openai": mock_openai_module}):
+            from src.coach.llm.providers.ollama import OllamaProvider
+            cfg = LLMConfig(provider="ollama", model="llama3.2", base_url="http://remote:11434/v1")
+            provider = OllamaProvider(cfg)
+        assert provider._ollama_root == "http://remote:11434"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
